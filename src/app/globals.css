@@ -4,7 +4,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * French Poppy — the single source of truth for PrepRoom's colour.
+ * French Poppy: the single source of truth for PrepRoom's colour.
  * Nothing else in the app should contain a hex value. Add a token here,
  * then use it as a Tailwind utility (bg-page, text-ink, border-line, ...).
  */
