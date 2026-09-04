@@ -22,7 +22,7 @@ function Meter({ label, value }: { label: string; value: number }) {
       <span className="w-28 shrink-0 text-right text-xs text-ink-2">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill">
         <div
-          className="h-full rounded-full bg-dusty"
+          className="h-full rounded-full bg-blue"
           style={{ width: `${Math.round(value * 100)}%` }}
         />
       </div>
@@ -117,7 +117,7 @@ export default function ProgressView({ sessions }: { sessions: Session[] }) {
             <path
               d={scores.map((s, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(s.score)}`).join(" ")}
               fill="none"
-              stroke="var(--dusty)"
+              stroke="var(--blue)"
               strokeWidth={2}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -129,7 +129,7 @@ export default function ProgressView({ sessions }: { sessions: Session[] }) {
                 cx={xFor(i)}
                 cy={yFor(s.score)}
                 r={hover === i ? 6 : 4.5}
-                fill="var(--dusty)"
+                fill="var(--blue)"
                 stroke="var(--card)"
                 strokeWidth={2}
                 vectorEffect="non-scaling-stroke"

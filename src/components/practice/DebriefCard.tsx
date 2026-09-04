@@ -41,21 +41,21 @@ export default function DebriefCard({
     <div className="rounded-2xl border bg-card hairline p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-dusty">Debrief</p>
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Debrief</p>
           <h3 className="mt-1 text-lg leading-tight font-semibold text-ink">{debrief.verdict}</h3>
           {scenario && (
             <p className="mt-1 text-xs text-ink-2">You practised against {scenario.counterpart}.</p>
           )}
         </div>
-        <div className="flex shrink-0 items-baseline gap-1 rounded-xl bg-sun px-3 py-1.5">
-          <span className="text-xl font-semibold text-on-sun">{debrief.score}</span>
-          <span className="text-xs text-on-sun/75">/10</span>
+        <div className="flex shrink-0 items-baseline gap-1 rounded-xl bg-amber px-3 py-1.5">
+          <span className="text-xl font-semibold text-on-amber">{debrief.score}</span>
+          <span className="text-xs text-on-amber/75">/10</span>
         </div>
       </div>
 
       <div className="mt-5 space-y-5">
-        <List title="What worked" items={debrief.strengths} dot="bg-sage" />
-        <List title="What to sharpen" items={debrief.improvements} dot="bg-poppy" />
+        <List title="What worked" items={debrief.strengths} dot="bg-blue" />
+        <List title="What to sharpen" items={debrief.improvements} dot="bg-coral" />
 
         {debrief.stronger_line.length > 0 && (
           <div>
@@ -66,7 +66,7 @@ export default function DebriefCard({
               {debrief.stronger_line.map((line, i) => (
                 <p
                   key={i}
-                  className="border-l-2 border-dusty bg-dusty/8 py-2 pl-3 pr-2 text-sm leading-relaxed text-ink"
+                  className="border-l-2 border-blue bg-blue/8 py-2 pl-3 pr-2 text-sm leading-relaxed text-ink"
                 >
                   {line}
                 </p>
@@ -75,7 +75,7 @@ export default function DebriefCard({
           </div>
         )}
 
-        <List title="Delivery" items={debrief.delivery} dot="bg-dusty" />
+        <List title="Delivery" items={debrief.delivery} dot="bg-blue" />
 
         {signals && signals.length > 1 && (
           <div className="border-t border-line/60 pt-4">

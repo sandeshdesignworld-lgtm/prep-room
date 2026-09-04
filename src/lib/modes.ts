@@ -25,7 +25,7 @@ export interface ModeConfig {
   starters: string[];
   /** Shown under the thread where it matters (social confidence). */
   disclaimer?: string;
-  accent: "poppy" | "sage" | "dusty";
+  accent: "coral" | "blue" | "amber";
 }
 
 const AUDIENCE = "Indian college students and freshers preparing for campus placements and early-career situations";
@@ -51,7 +51,7 @@ export const MODES: Record<ModeId, ModeConfig> = {
       "A teammate keeps missing deadlines and I have to say something",
       "I have to tell my parents I'm changing my career plan",
     ],
-    accent: "poppy",
+    accent: "coral",
   },
 
   interview: {
@@ -74,7 +74,7 @@ export const MODES: Record<ModeId, ModeConfig> = {
       "How do I answer 'why should we hire you' without sounding fake?",
       "I have no internships. How do I talk about my projects?",
     ],
-    accent: "dusty",
+    accent: "blue",
   },
 
   social: {
@@ -99,7 +99,7 @@ export const MODES: Record<ModeId, ModeConfig> = {
     ],
     disclaimer:
       "This is a practice aid, not therapy or diagnosis. If something heavier is going on, please talk to someone you trust or a professional.",
-    accent: "sage",
+    accent: "amber",
   },
 };
 

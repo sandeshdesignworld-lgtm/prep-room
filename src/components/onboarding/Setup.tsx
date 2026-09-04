@@ -9,15 +9,15 @@ import { CONSENT_VERSION } from "@/lib/storage";
 import type { InputPreference, ModeId, Profile } from "@/lib/types";
 
 const ACCENT_RING: Record<string, string> = {
-  poppy: "border-poppy bg-poppy/8",
-  sage: "border-sage bg-sage/12",
-  dusty: "border-dusty bg-dusty/10",
+  coral: "border-coral bg-coral/8",
+  blue: "border-blue bg-blue/12",
+  amber: "border-amber bg-amber/20",
 };
 
 const ACCENT_DOT: Record<string, string> = {
-  poppy: "bg-poppy",
-  sage: "bg-sage",
-  dusty: "bg-dusty",
+  coral: "bg-coral",
+  blue: "bg-blue",
+  amber: "bg-amber",
 };
 
 export default function Setup({ onDone }: { onDone: (profile: Profile) => void }) {
@@ -138,7 +138,7 @@ export default function Setup({ onDone }: { onDone: (profile: Profile) => void }
                     aria-pressed={selected}
                     className={[
                       "rounded-2xl border p-3.5 text-left transition-colors",
-                      selected ? "border-dusty bg-dusty/10" : "bg-card hairline hover:bg-fill-2",
+                      selected ? "border-blue bg-blue/10" : "bg-card hairline hover:bg-fill-2",
                     ].join(" ")}
                   >
                     <span className="block text-sm font-medium text-ink">{opt.label}</span>

@@ -13,8 +13,13 @@ const SESSIONS_KEY = "preproom.sessions.v1";
 /**
  * Bump when the privacy policy changes materially. A profile carrying an older
  * version is re-asked for consent rather than quietly carried over.
+ *
+ * 2026-09-04: the room now opens with the camera on rather than asking per
+ * rehearsal. Nothing about where the frames go changed, but when the camera
+ * switches on did, and that is exactly the kind of thing someone agreed to
+ * under the old wording and should get to agree to again.
  */
-export const CONSENT_VERSION = "2026-09-02";
+export const CONSENT_VERSION = "2026-09-04";
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;

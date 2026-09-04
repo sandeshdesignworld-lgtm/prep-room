@@ -27,6 +27,7 @@ export default function Composer({
   busy,
   placeholder,
   hint,
+  voiceEnabled = true,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -36,6 +37,12 @@ export default function Composer({
   busy: boolean;
   placeholder: string;
   hint: string;
+  /**
+   * False when the call's mic is muted. The mic button disappears rather than
+   * sitting there disabled, so there is one obvious place to unmute: the call
+   * controls, the same as any other call.
+   */
+  voiceEnabled?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -49,7 +56,13 @@ export default function Composer({
   const dictation = useDictation({
     onFinal: (text) => onChange(join(valueRef.current, text)),
   });
-  const { listening, interim, supported, error, start, stop: stopMic } = dictation;
+  const { listening, interim, error, start, stop: stopMic } = dictation;
+  const supported = dictation.supported && voiceEnabled;
+
+  // Muting mid-phrase has to actually stop the recogniser, not just hide it.
+  useEffect(() => {
+    if (!voiceEnabled && listening) stopMic();
+  }, [voiceEnabled, listening, stopMic]);
 
   // What's shown includes the phrase still being recognised; what's committed doesn't.
   const shown = listening && interim ? join(value, interim) : value;
@@ -88,7 +101,7 @@ export default function Composer({
     <div
       className={[
         "rounded-2xl border bg-card p-2 transition-colors",
-        listening ? "border-dusty" : "hairline",
+        listening ? "border-blue" : "hairline",
       ].join(" ")}
     >
       <textarea
@@ -120,14 +133,14 @@ export default function Composer({
               className={[
                 "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
                 listening
-                  ? "bg-dusty text-white"
+                  ? "bg-blue-strong text-on-blue-strong"
                   : "text-ink-2 hover:bg-fill-2 hover:text-ink",
               ].join(" ")}
             >
               {listening && (
                 <span
                   aria-hidden
-                  className="absolute inset-0 animate-ping rounded-full bg-dusty/40"
+                  className="absolute inset-0 animate-ping rounded-full bg-blue/40"
                 />
               )}
               <span className="relative">
@@ -136,7 +149,7 @@ export default function Composer({
             </button>
           )}
           <span
-            className={`truncate text-xs ${error ? "text-brick" : "text-ink-3"}`}
+            className={`truncate text-xs ${error ? "text-red" : "text-ink-3"}`}
             role={error ? "alert" : undefined}
           >
             {status}
@@ -156,7 +169,7 @@ export default function Composer({
             type="button"
             onClick={submit}
             disabled={!canSend}
-            className="shrink-0 rounded-lg bg-poppy px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-poppy-hover disabled:pointer-events-none disabled:opacity-40"
+            className="shrink-0 rounded-lg bg-coral px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-coral-hover disabled:pointer-events-none disabled:opacity-40"
           >
             Send
           </button>

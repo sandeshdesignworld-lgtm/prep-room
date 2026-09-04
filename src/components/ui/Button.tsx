@@ -5,11 +5,11 @@ import type { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
-  // Poppy is the one loud thing on a screen. Never put two of these side by side.
-  primary: "bg-poppy text-white hover:bg-poppy-hover active:bg-poppy-hover shadow-sm",
+  // Coral is the one loud thing on a screen. Never put two of these side by side.
+  primary: "bg-coral text-white hover:bg-coral-hover active:bg-coral-hover shadow-sm",
   secondary: "bg-card text-ink hairline border hover:bg-fill-2",
   ghost: "text-ink-2 hover:text-ink hover:bg-fill-2",
-  danger: "bg-brick text-white hover:opacity-90",
+  danger: "bg-red text-white hover:opacity-90",
 };
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {

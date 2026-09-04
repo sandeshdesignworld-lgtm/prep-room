@@ -2,6 +2,7 @@ import {
   matrixLayout, rotationMatrix, headAngles, isFacing, faceSignals,
   shoulderWidth, shoulderTilt, openness, fidget, nudgeLevel,
   downsample, rollupByTurn, summariseSignals,
+  readCandidates, newGate, gateStatus, STATUS_HOLD_MS, FIDGET_NOMINAL_MS,
 } from "../.test-build/signals-math.js";
 
 let pass=0, fail=0;
@@ -102,6 +103,60 @@ ok("quotes what they said", summary.includes("bus tracking app"));
 ok("flags the biggest shift", summary.includes("Biggest change") && summary.includes("facing the camera"));
 ok("states signals are physical, not emotional", /not emotions/i.test(summary));
 ok("no emotion words leak in", !/(anxious|nervous|confident|happy|sad|afraid)/i.test(summary));
+
+console.log("--- fidget is rate-independent ---");
+// Same physical movement sampled half as often: twice the travel per step, half
+// the steps. The score must not move, or every threshold shifts with the fps.
+const walk10 = Array.from({length:11},(_,i)=>({x:0.5+i*0.004,y:0.5}));
+const walk20 = Array.from({length:6},(_,i)=>({x:0.5+i*0.008,y:0.5}));
+near("100ms and 200ms sampling agree", fidget(walk20,200), fidget(walk10,100), 1e-9);
+near("default interval is the nominal one", fidget(walk10), fidget(walk10,FIDGET_NOMINAL_MS), 1e-9);
+
+console.log("--- live read candidates ---");
+const good = readCandidates({eyeContactRatio:0.9, openness:0.7, fidget:0.1});
+ok("settled reads good across the board",
+  good.eyeContact==="good" && good.posture==="good" && good.steady==="good");
+const drifted = readCandidates({eyeContactRatio:0.2, openness:0.1, fidget:0.9});
+ok("drifted reads attention across the board",
+  drifted.eyeContact==="attention" && drifted.posture==="attention" && drifted.steady==="attention");
+ok("eye contact needs more than half the window",
+  readCandidates({eyeContactRatio:0.56,openness:1,fidget:0}).eyeContact==="good" &&
+  readCandidates({eyeContactRatio:0.54,openness:1,fidget:0}).eyeContact==="attention");
+ok("sitting up straighter is never a fault",
+  readCandidates({eyeContactRatio:1,openness:1,fidget:0}).posture==="good");
+
+console.log("--- status gate (the anti-strobe) ---");
+let g = newGate("good");
+g = gateStatus(g, "attention", 0);
+ok("a new condition does not flip immediately", g.status==="good");
+g = gateStatus(g, "attention", STATUS_HOLD_MS - 1);
+ok("still holding just before the window closes", g.status==="good");
+g = gateStatus(g, "attention", STATUS_HOLD_MS);
+ok("flips once the condition has held", g.status==="attention");
+
+// A single stray frame mid-wait must reset the clock, not squeak through.
+let h = newGate("good");
+h = gateStatus(h, "attention", 0);
+h = gateStatus(h, "good", 500);
+h = gateStatus(h, "attention", 600);
+h = gateStatus(h, "attention", 1000);
+ok("a blip resets the waiting period", h.status==="good");
+h = gateStatus(h, "attention", 1400);
+ok("and it flips once the fresh window closes", h.status==="attention");
+
+// Alternating every frame is exactly the strobe the debounce exists to stop.
+let s = newGate("good");
+for (let i=0;i<40;i++) s = gateStatus(s, i%2 ? "attention" : "good", i*66);
+ok("frame-by-frame flapping never flips the pill", s.status==="good");
+
+let back = newGate("attention");
+back = gateStatus(back, "good", 0);
+back = gateStatus(back, "good", STATUS_HOLD_MS);
+ok("recovering is debounced the same way", back.status==="good");
+
+const steadyGate = newGate("good");
+ok("an unchanged gate is returned by identity",
+  gateStatus(steadyGate, "good", 500) === steadyGate);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

@@ -5,11 +5,11 @@ import Button from "@/components/ui/Button";
 const PROMISES = [
   {
     title: "Your camera never leaves your device",
-    body: "If you turn the camera on during practice, it's read entirely inside your browser, the models run on your machine, off files served by this app. No video is recorded, uploaded, or sent anywhere, and the camera is off unless you switch it on.",
+    body: "The room opens with your camera on, like any call, and you can switch it off at any point. It's read entirely inside your browser, the models run on your machine, off files served by this app. No video is recorded, uploaded, or sent anywhere, and your body language is only read while you're rehearsing.",
   },
   {
     title: "We keep the notes, not the recording",
-    body: "A transcript, what you were working on, how it went, and (if you used the camera) a few numbers about where you were looking and how much you moved. That's it.",
+    body: "A transcript, what you were working on, how it went, and (if the camera was on while you rehearsed) a few numbers about where you were looking and how much you moved. That's it.",
   },
   {
     title: "You can delete any of it, any time",
@@ -25,7 +25,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-5 py-12">
       <div className="fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-dusty">PrepRoom</p>
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
         <h1 className="mt-3 text-3xl leading-tight font-semibold text-ink">
           A place to practise the conversation before you have it.
         </h1>
@@ -41,7 +41,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
               <li key={p.title} className="flex gap-3">
                 <span
                   aria-hidden
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sage"
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue"
                 />
                 <span>
                   <span className="block text-sm font-medium text-ink">{p.title}</span>
@@ -74,7 +74,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
               href="/privacy"
               target="_blank"
               rel="noreferrer"
-              className="text-dusty underline underline-offset-2"
+              className="text-blue-strong underline underline-offset-2"
             >
               full privacy policy
             </a>

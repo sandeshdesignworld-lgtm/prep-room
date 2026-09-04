@@ -14,8 +14,8 @@ export const viewport: Viewport = {
   // Browser chrome can't read CSS variables, so these two mirror --page in
   // globals.css. They are the only hex values outside that file, so keep them in sync.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5ebe0" },
-    { media: "(prefers-color-scheme: dark)", color: "#211d19" },
+    { media: "(prefers-color-scheme: light)", color: "#efe9de" },
+    { media: "(prefers-color-scheme: dark)", color: "#23261f" },
   ],
 };
 

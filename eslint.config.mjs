@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated, not ours: the MediaPipe WASM glue is downloaded by
+    // scripts/setup-mediapipe.mjs (and gitignored), and .test-build is tsc output.
+    "public/mediapipe/**",
+    ".test-build/**",
   ]),
 ]);
 

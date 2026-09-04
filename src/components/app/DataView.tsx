@@ -58,7 +58,7 @@ export default function DataView({
         <ul className="mt-3 space-y-2">
           {KEPT.map((item) => (
             <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-ink-2">
-              <span aria-hidden className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-sage" />
+              <span aria-hidden className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-blue" />
               <span>{item}</span>
             </li>
           ))}
@@ -68,7 +68,7 @@ export default function DataView({
         <ul className="mt-3 space-y-2">
           {NEVER.map((item) => (
             <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-ink-2">
-              <span aria-hidden className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-dusty" />
+              <span aria-hidden className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-blue" />
               <span>{item}</span>
             </li>
           ))}
@@ -80,7 +80,7 @@ export default function DataView({
           part of the conversation leaves your device. Nothing else does.{" "}
           <a
             href="/privacy"
-            className="text-dusty underline underline-offset-2"
+            className="text-blue-strong underline underline-offset-2"
             target="_blank"
             rel="noreferrer"
           >
@@ -112,7 +112,7 @@ export default function DataView({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="text-dusty underline underline-offset-2"
+            className="text-blue-strong underline underline-offset-2"
           >
             History
           </button>
@@ -121,7 +121,7 @@ export default function DataView({
         </p>
 
         {confirming ? (
-          <div className="mt-4 rounded-xl border border-brick/40 bg-brick/8 p-4">
+          <div className="mt-4 rounded-xl border border-red/40 bg-red/8 p-4">
             <p className="text-sm text-ink">
               Delete all {sessions.length}{" "}
               {sessions.length === 1 ? "conversation" : "conversations"}, your progress and your
@@ -134,7 +134,7 @@ export default function DataView({
                   deleteEverything();
                   onWiped();
                 }}
-                className="rounded-xl bg-brick px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+                className="rounded-xl bg-red px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
               >
                 Yes, delete everything
               </button>
@@ -151,7 +151,7 @@ export default function DataView({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="mt-3 rounded-xl border border-brick/50 px-4 py-2.5 text-sm font-medium text-brick transition-colors hover:bg-brick/8"
+            className="mt-3 rounded-xl border border-red/50 px-4 py-2.5 text-sm font-medium text-red transition-colors hover:bg-red/8"
           >
             Delete everything
           </button>

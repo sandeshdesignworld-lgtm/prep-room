@@ -51,7 +51,7 @@ npm run lint
 
 | Path | What it is |
 |---|---|
-| `src/app/globals.css` | The French Poppy palette. **Every colour in the app comes from here**, light and dark, one switch. |
+| `src/app/globals.css` | The Crisp White palette. **Every colour in the app comes from here**, light and dark, one switch. |
 | `src/lib/modes.ts` | Everything mode-specific: tone, audience, counterpart, openers, starters. The engine reads this instead of branching on the mode. |
 | `src/lib/prompts.ts` | The advisor system prompt, plus the roleplay and debrief prompts for later phases. |
 | `src/lib/anthropic.ts` | Server-only Anthropic client, model id, and error mapping. |
@@ -59,13 +59,14 @@ npm run lint
 | `src/app/api/scenario/route.ts` | `POST /api/scenario`, reads the advisor thread and casts the counterpart. Structured output. |
 | `src/app/api/roleplay/route.ts` | `POST /api/roleplay`, the counterpart's next line, in character, streamed. |
 | `src/app/api/debrief/route.ts` | `POST /api/debrief`, scored debrief as JSON. Structured output, with `json.ts` as a fallback parser. |
-| `src/components/practice/` | Roleplay panel, debrief card, ambient nudge, signal timeline. |
-| `src/components/app/` | Nav shell, history, progress, and the data/privacy controls. |
+| `src/components/room/` | The room: the call stage (hero camera, live pills, call controls), the signal cards under it, the coach panel on the right, and `Room.tsx` holding the session that runs through both. |
+| `src/components/practice/` | Debrief card, ambient nudge, signal timeline. |
+| `src/components/app/` | The icon rail, history, progress, and the data/privacy controls. |
 | `src/lib/progress.ts` | Aggregates saved sessions into the progress numbers. Pure and tested. |
 | `src/app/privacy/page.tsx` | The privacy notice. Static, readable without signing in. |
 | `tests/` | Plain assertion scripts for every pure module. `npm test`. |
 | `src/lib/signals-math.ts` | The delivery-signal maths, head angles, posture, movement, rollups, the debrief summary. Pure and fully tested. |
-| `src/lib/signals.ts` | MediaPipe capture in the browser. Camera in, numbers out; no frame is kept. |
+| `src/lib/signals.ts` | MediaPipe capture in the browser. Camera in, numbers out; no frame is kept. The camera and the analysis start separately. |
 | `scripts/setup-mediapipe.mjs` | Copies the WASM runtime and downloads the models into `public/`. Runs before dev and build. |
 | `src/lib/sarvam.ts` | Server-only Sarvam Bulbul client. Key never reaches the browser. |
 | `src/app/api/speak/route.ts` | `POST /api/speak` streams one sentence of audio; `GET` reports whether voice is configured. |
@@ -74,7 +75,7 @@ npm run lint
 | `src/lib/speech-text.ts` | Pure sentence-chunking and speech-sanitising helpers, kept testable. |
 | `src/lib/storage.ts` | Session and profile persistence. Currently the browser; swap the bodies for API calls in Phase 5. |
 | `src/components/onboarding/` | Trust + consent screen, then setup. |
-| `src/components/advisor/` | The advisor thread. |
+| `src/components/advisor/` | Message bubbles and the composer, used by the coach panel. |
 
 ## Phase status
 
@@ -86,13 +87,19 @@ npm run lint
   no mic, with no broken UI. Toggle read-aloud from the thread header.
 - **Phase 3. Roleplay.** Done. Tap "Practise this out loud" in the thread and the
   app casts a counterpart from the conversation, plays it in character turn by turn
-  (voice included), and debriefs on "End practice" with a score, what worked, what to
+  (voice included), and debriefs on "End" with a score, what worked, what to
   sharpen and a stronger line. Inline in the thread, with full screen. The ambient
   nudge toggle is built and persisted; it stays dark until Phase 4 feeds it signals.
 - **Phase 4. Delivery signals.** Done. Opt-in camera during roleplay reads face
-  and pose with MediaPipe at ~10Hz, entirely in the browser. Nothing is shown
-  mid-roleplay except the ambient dot; the debrief gets a per-turn summary and a
-  small-multiples timeline.
+  and pose with MediaPipe, entirely in the browser. The camera self-view is the
+  practice screen: a large mirrored video with three debounced status pills over
+  it (eye contact, open posture, steady), the counterpart's current line beneath,
+  and the debrief afterwards getting a per-turn summary and a small-multiples
+  timeline.
+- **The room.** The app is a video call: an icon rail on the left, the user's own
+  camera filling the middle with the call controls over it, and the coach on the
+  right carrying both the advice and the roleplay turns. Modes are a selector at
+  the top of that panel rather than separate screens.
 - **Phase 5. History, progress, privacy controls.** Done. Nav across coach,
   history, progress and data. Reopen or delete any past conversation, see scores
   over time and averaged delivery, download everything as JSON, wipe the lot.
@@ -107,11 +114,29 @@ runtime, and it works offline. Those files are generated and gitignored; `npm ru
 dev` and `npm run build` regenerate them, and if the download fails the app still
 runs, just without signals.
 
-Captured at ~10Hz: whether the head is pointed at the camera (from the facial
-transformation matrix, |yaw| < 18 deg and |pitch| < 14 deg), the four paired
-blendshapes, shoulder width and tilt, and nose travel over a rolling second.
-Shoulder width is scored against the user's own opening seconds, because the
-absolute number just says how far they're sitting from the laptop.
+The camera and the analysis are separate. The room opens with the camera on, the
+way a call does, but the models aren't even fetched until a rehearsal starts:
+reading body language while someone types a question to a coach measures nothing,
+and 9MB of models is a lot to spend on that. Switching the camera off stops the
+read, and it does not restart mid-rehearsal, so a summary is never stitched
+together from two halves of a session.
+
+Face runs at ~15Hz and pose on alternate detections (~7.5Hz), which is where the
+cost is and where nothing moves fast enough to need more. Captured: whether the
+head is pointed at the camera (from the facial transformation matrix, |yaw| < 18
+deg and |pitch| < 14 deg), the four paired blendshapes, shoulder width and tilt,
+and nose travel over a rolling second. Shoulder width is scored against the
+user's own opening seconds, because the absolute number just says how far they're
+sitting from the laptop. Nose travel is normalised to a nominal 100ms step, so
+changing the detection rate doesn't silently move every threshold built on it.
+
+Two things come out, and the difference is the whole design. `read` is three
+debounced good/attention statuses shown live over the camera: two words and a
+coloured dot, so the user can see their own signals without being coached at.
+A status only flips after the condition has held for 800ms in either direction,
+which is what stops the pills strobing and turning into the mid-roleplay
+interruption the brief forbids. `samples` is the full timeline, and nobody sees
+it until the roleplay is over.
 
 Raw samples never leave the browser. `/api/debrief` receives a text rollup; a 1Hz
 downsample is kept for the chart.
@@ -140,7 +165,7 @@ so existing users are asked again.
   imported from a `"use client"` component.
 - Colours live in `globals.css` as tokens. The only exception is `themeColor` in
   `layout.tsx`, which browser chrome requires as a literal.
-- One poppy-orange action per screen. Everything else is quiet.
+- One coral action per screen. Everything else is quiet.
 - Signals are physical, never emotional. `signals-math.ts` emits positions and
   movement with no interpretation, and the debrief prompt forbids naming an
   emotion. There is a test asserting no emotion words appear in the summary.

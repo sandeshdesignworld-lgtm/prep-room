@@ -57,7 +57,7 @@ export default function VoicesPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-dusty">PrepRoom</p>
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
       <h1 className="mt-3 text-2xl font-semibold text-ink">Pick a voice</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-2">
         These are Sarvam&apos;s Bulbul voices, reading a line the interviewer might open with.
@@ -66,15 +66,15 @@ export default function VoicesPage() {
       </p>
 
       {error && (
-        <p className="mt-4 rounded-xl border border-brick/40 bg-brick/8 px-3.5 py-2.5 text-sm text-ink">
+        <p className="mt-4 rounded-xl border border-red/40 bg-red/8 px-3.5 py-2.5 text-sm text-ink">
           {error}
         </p>
       )}
 
       {chosen && (
-        <p className="mt-4 rounded-xl border border-sage/50 bg-sage/12 px-3.5 py-2.5 text-sm text-ink">
+        <p className="mt-4 rounded-xl border border-blue/50 bg-blue/12 px-3.5 py-2.5 text-sm text-ink">
           Saved. The coach will use <span className="font-medium">{chosen}</span> from now on.{" "}
-          <Link href="/" className="text-dusty underline underline-offset-2">
+          <Link href="/" className="text-blue-strong underline underline-offset-2">
             Back to PrepRoom
           </Link>
         </p>
@@ -101,8 +101,8 @@ export default function VoicesPage() {
                 className={[
                   "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
                   chosen === speaker
-                    ? "bg-sage/20 text-ink"
-                    : "text-dusty hover:bg-fill-2",
+                    ? "bg-blue/20 text-ink"
+                    : "text-blue-strong hover:bg-fill-2",
                 ].join(" ")}
               >
                 {chosen === speaker ? "Chosen" : "Use"}
@@ -113,7 +113,7 @@ export default function VoicesPage() {
       </ul>
 
       <p className="mt-8 text-sm">
-        <Link href="/" className="text-dusty underline underline-offset-2">
+        <Link href="/" className="text-blue-strong underline underline-offset-2">
           Back to PrepRoom
         </Link>
       </p>

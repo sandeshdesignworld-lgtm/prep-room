@@ -10,17 +10,30 @@
  *
  * level: 0 = settled, 1 = worth easing off. Anything in between shifts quietly.
  */
-export default function AmbientNudge({ level }: { level: number | null }) {
+const CORNER = {
+  "top-right": "right-4 top-4",
+  "bottom-right": "bottom-4 right-4",
+  "bottom-left": "bottom-4 left-4",
+} as const;
+
+export default function AmbientNudge({
+  level,
+  corner = "top-right",
+}: {
+  level: number | null;
+  /** Which corner of the positioned parent it sits in. */
+  corner?: keyof typeof CORNER;
+}) {
   if (level === null) return null;
 
   const clamped = Math.min(1, Math.max(0, level));
-  // Sage when settled, drifting toward poppy. Never red, never alarming.
-  const color = clamped < 0.5 ? "var(--sage)" : "var(--poppy)";
+  // Blue when settled, drifting toward amber, matching the pills. Never red.
+  const color = clamped < 0.5 ? "var(--blue)" : "var(--amber)";
 
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute right-4 top-4 transition-all duration-[1200ms] ease-in-out"
+      className={`pointer-events-none absolute ${CORNER[corner]} transition-all duration-[1200ms] ease-in-out`}
       style={{ opacity: 0.25 + clamped * 0.45 }}
     >
       <span

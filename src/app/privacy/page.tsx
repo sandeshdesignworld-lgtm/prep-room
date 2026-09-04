@@ -20,11 +20,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function PrivacyPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-dusty">PrepRoom</p>
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
       <h1 className="mt-3 text-2xl font-semibold text-ink">Privacy</h1>
       <p className="mt-2 text-sm text-ink-2">Last updated {UPDATED}.</p>
 
-      <div className="mt-6 rounded-2xl border border-poppy/40 bg-poppy/8 p-4">
+      <div className="mt-6 rounded-2xl border border-coral/40 bg-coral/8 p-4">
         <p className="text-sm leading-relaxed text-ink">
           <strong className="font-semibold">Pre-launch draft.</strong> This is written to be
           accurate about what the app currently does, but it has not been reviewed by a lawyer and
@@ -59,11 +59,13 @@ export default function PrivacyPage() {
           scores and debriefs. Used to show you your progress.
         </p>
         <p>
-          <strong className="font-medium text-ink">Delivery signals, only if you switch the camera
-          on.</strong> Numbers describing physical position and movement: whether your head was
-          pointed at the screen, how much it moved, how square your shoulders were, and a set of
-          facial-muscle measurements. These are computed from the camera inside your browser. They
-          describe your body, not your feelings, and nothing here diagnoses or assesses you.
+          <strong className="font-medium text-ink">Delivery signals, only from a rehearsal, and
+          only with the camera on.</strong> Numbers describing physical position and movement:
+          whether your head was pointed at the screen, how much it moved, how square your shoulders
+          were, and a set of facial-muscle measurements. The room opens with the camera on so you
+          can see yourself, but nothing is measured until you start a rehearsal, and switching the
+          camera off stops it entirely. These are computed inside your browser. They describe your
+          body, not your feelings, and nothing here diagnoses or assesses you.
         </p>
       </Section>
 
@@ -146,7 +148,7 @@ export default function PrivacyPage() {
       </Section>
 
       <p className="mt-10 text-sm">
-        <Link href="/" className="text-dusty underline underline-offset-2">
+        <Link href="/" className="text-blue-strong underline underline-offset-2">
           Back to PrepRoom
         </Link>
       </p>

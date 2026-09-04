@@ -6,9 +6,9 @@ import { relativeDay } from "@/lib/progress";
 import type { Session } from "@/lib/types";
 
 const ACCENT_DOT: Record<string, string> = {
-  poppy: "bg-poppy",
-  sage: "bg-sage",
-  dusty: "bg-dusty",
+  coral: "bg-coral",
+  blue: "bg-blue",
+  amber: "bg-amber",
 };
 
 export default function HistoryView({
@@ -35,7 +35,7 @@ export default function HistoryView({
         <button
           type="button"
           onClick={onStartNew}
-          className="mt-5 rounded-xl bg-poppy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-poppy-hover"
+          className="mt-5 rounded-xl bg-coral px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-coral-hover"
         >
           Start a conversation
         </button>
@@ -82,7 +82,7 @@ export default function HistoryView({
                 </button>
 
                 {session.debrief && (
-                  <span className="shrink-0 rounded-lg bg-sun px-2 py-1 text-xs font-semibold text-on-sun">
+                  <span className="shrink-0 rounded-lg bg-amber px-2 py-1 text-xs font-semibold text-on-amber">
                     {session.debrief.score}/10
                   </span>
                 )}
@@ -92,7 +92,7 @@ export default function HistoryView({
                     type="button"
                     onClick={() => setConfirming(session.id)}
                     aria-label={`Delete ${session.title}`}
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-3 transition-colors hover:bg-fill-2 hover:text-brick"
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-3 transition-colors hover:bg-fill-2 hover:text-red"
                   >
                     Delete
                   </button>
@@ -117,7 +117,7 @@ export default function HistoryView({
                       onDelete(session.id);
                       setConfirming(null);
                     }}
-                    className="rounded-lg bg-brick px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90"
+                    className="rounded-lg bg-red px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90"
                   >
                     Delete
                   </button>

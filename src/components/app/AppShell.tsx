@@ -4,17 +4,94 @@ import type { ReactNode } from "react";
 
 export type View = "advisor" | "history" | "progress" | "data";
 
-const TABS: { id: View; label: string }[] = [
-  { id: "advisor", label: "Coach" },
-  { id: "history", label: "History" },
-  { id: "progress", label: "Progress" },
-  { id: "data", label: "Your data" },
+/**
+ * The room's chrome: a narrow icon rail on the left, the room itself filling
+ * everything else. On a phone the rail becomes a bottom bar, because a 64px
+ * column on a 390px screen is a quarter of the width spent on navigation.
+ *
+ * Active is coral, everything else is muted. Labels appear on hover on desktop
+ * and are always available to a screen reader.
+ */
+
+function CoachIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <rect x="2.5" y="6" width="13" height="12" rx="3" stroke="currentColor" />
+      <path d="M15.5 11l6-3.5v9l-6-3.5z" stroke="currentColor" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" />
+      <path d="M12 7.5V12l3 2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ProgressIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <path d="M4 19V10M10 19V5M16 19v-6M22 19H2" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" />
+      <path d="M5 19.5c1.2-3.2 3.9-5 7-5s5.8 1.8 7 5" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const NAV: { id: View; label: string; icon: () => ReactNode }[] = [
+  { id: "advisor", label: "Coach", icon: CoachIcon },
+  { id: "history", label: "History", icon: HistoryIcon },
+  { id: "progress", label: "Progress", icon: ProgressIcon },
 ];
 
-/**
- * Quiet chrome. The advisor is home, so the nav stays out of the way, no
- * colour, no badges, nothing competing with the one orange action on a screen.
- */
+const PROFILE: { id: View; label: string; icon: () => ReactNode } = {
+  id: "data",
+  label: "You and your data",
+  icon: ProfileIcon,
+};
+
+function NavButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      aria-label={label}
+      title={label}
+      className={[
+        "group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors",
+        active ? "bg-coral/12 text-coral" : "text-ink-3 hover:bg-fill hover:text-ink-2",
+      ].join(" ")}
+    >
+      {children}
+      {/* Desktop only: the rail has no room for labels, so they arrive on hover. */}
+      <span className="pointer-events-none absolute left-full z-30 ml-2 hidden whitespace-nowrap rounded-lg bg-ink px-2 py-1 text-xs font-medium text-page opacity-0 transition-opacity group-hover:opacity-100 md:block">
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export default function AppShell({
   view,
   onChange,
@@ -24,30 +101,66 @@ export default function AppShell({
   onChange: (v: View) => void;
   children: ReactNode;
 }) {
+  const items = [...NAV, PROFILE];
+
   return (
-    <div className="min-h-dvh">
-      <nav className="sticky top-0 z-20 border-b bg-page/92 hairline backdrop-blur">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-1 px-4 py-2">
-          <span className="mr-auto text-xs font-medium uppercase tracking-[0.14em] text-dusty">
-            PrepRoom
-          </span>
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onChange(tab.id)}
-              aria-current={view === tab.id ? "page" : undefined}
-              className={[
-                "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                view === tab.id ? "bg-fill text-ink" : "text-ink-2 hover:bg-fill-2 hover:text-ink",
-              ].join(" ")}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <div className="flex h-dvh flex-col md:flex-row">
+      {/* Desktop rail */}
+      <nav
+        aria-label="Sections"
+        className="hidden shrink-0 flex-col items-center gap-1 border-r bg-card px-2.5 py-4 hairline md:flex md:w-16"
+      >
+        <span
+          aria-hidden
+          className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-coral text-sm font-semibold text-on-accent"
+          title="PrepRoom"
+        >
+          P
+        </span>
+        {NAV.map((item) => (
+          <NavButton
+            key={item.id}
+            label={item.label}
+            active={view === item.id}
+            onClick={() => onChange(item.id)}
+          >
+            <item.icon />
+          </NavButton>
+        ))}
+        <div className="mt-auto">
+          <NavButton
+            label={PROFILE.label}
+            active={view === PROFILE.id}
+            onClick={() => onChange(PROFILE.id)}
+          >
+            <PROFILE.icon />
+          </NavButton>
         </div>
       </nav>
-      {children}
+
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</main>
+
+      {/* Mobile bar */}
+      <nav
+        aria-label="Sections"
+        className="flex shrink-0 items-center justify-around border-t bg-card px-2 py-1.5 hairline md:hidden"
+      >
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange(item.id)}
+            aria-current={view === item.id ? "page" : undefined}
+            aria-label={item.label}
+            className={[
+              "flex h-11 w-16 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors",
+              view === item.id ? "bg-coral/12 text-coral" : "text-ink-3",
+            ].join(" ")}
+          >
+            <item.icon />
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

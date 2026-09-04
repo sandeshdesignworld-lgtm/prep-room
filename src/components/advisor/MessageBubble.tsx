@@ -17,7 +17,7 @@ function renderBody(content: string) {
       <ul key={`ul-${blocks.length}`} className="my-2 space-y-1.5">
         {bullets.map((b, i) => (
           <li key={i} className="flex gap-2.5">
-            <span aria-hidden className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-sage" />
+            <span aria-hidden className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-blue" />
             <span>{b}</span>
           </li>
         ))}
@@ -46,7 +46,7 @@ function renderBody(content: string) {
       blocks.push(
         <p
           key={`q-${blocks.length}`}
-          className="my-2.5 border-l-2 border-dusty bg-dusty/8 py-2 pl-3 pr-2 text-[15px] italic"
+          className="my-2.5 border-l-2 border-blue bg-blue/8 py-2 pl-3 pr-2 text-[15px] italic"
         >
           &ldquo;{quoted[1]}&rdquo;
         </p>

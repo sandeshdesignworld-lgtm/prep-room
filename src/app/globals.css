@@ -4,87 +4,114 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * French Poppy: the single source of truth for PrepRoom's colour.
+ * Crisp White: the single source of truth for PrepRoom's colour.
  * Nothing else in the app should contain a hex value. Add a token here,
  * then use it as a Tailwind utility (bg-page, text-ink, border-line, ...).
+ *
+ * Brand-fixed and exact: page, card, line, the three inks, coral (+hover),
+ * blue, amber, red, and the two bubble fills. Everything else is derived,
+ * and each derived token says what it's derived for.
  */
 :root {
-  --page: #f5ebe0;
+  --page: #f7f8fa;
   --card: #ffffff;
-  --line: #d4c6ba;
-  --fill: #efe7dd;
-  --fill-2: #f2ece3;
+  --line: #e6e8ec;
+  /* Derived: two neutral fills for hovers and resting surfaces. */
+  --fill: #f1f3f5;
+  --fill-2: #f7f8fa;
 
-  --ink: #33302b;
-  --ink-2: #7c7468;
-  --ink-3: #a89d8c;
+  --ink: #1e2430;
+  --ink-2: #667085;
+  --ink-3: #98a2b3;
   --on-accent: #ffffff;
 
-  --poppy: #d66536;
-  --poppy-hover: #c25a2e;
-  --sage: #929673;
-  --dusty: #718eaf;
-  --sun: #d1c481;
-  --on-sun: #3b3520;
-  --brick: #b4472f;
+  --coral: #f26a4b;
+  --coral-hover: #e15a3c;
 
-  --bubble-user: #dce6f0;
-  --bubble-user-ink: #2c3a48;
-  --bubble-coach: #f2ece3;
-  --bubble-coach-ink: #33302b;
+  --blue: #3b82f6;
+  /*
+   * Derived. Brand blue is 3.8:1 on white: right for a dot, a tick or a fill,
+   * short of AA for body text. This is the same hue at 5.1:1 for links and
+   * labels.
+   */
+  --blue-strong: #2563eb;
+  --on-blue-strong: #ffffff;
+
+  --amber: #f59e0b;
+  /* Derived: amber is a light fill, so anything sitting on it needs dark ink. */
+  --on-amber: #3a2a05;
+
+  --red: #ef4444;
+
+  --bubble-coach: #f1f3f5;
+  --bubble-coach-ink: #1e2430;
+  --bubble-user: #fdeae4;
+  --bubble-user-ink: #1e2430;
 }
 
-/* Warm dark: a deep charcoal-brown base, brighter accents, cream text. */
+/*
+ * Neutral dark: clean grays, never murky, with the same coral and blue lifted
+ * for a dark ground. Written twice, once for the system preference and once
+ * for the explicit class, so the toggle wins both ways.
+ */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --page: #211d19;
-    --card: #2b2621;
-    --line: #453d35;
-    --fill: #332d27;
-    --fill-2: #383129;
+    --page: #14161a;
+    --card: #1c1f26;
+    --line: #2c313a;
+    --fill: #23272f;
+    --fill-2: #1c1f26;
 
-    --ink: #f2e7db;
-    --ink-2: #b8ac9c;
-    --ink-3: #8b7f70;
+    --ink: #f2f4f7;
+    --ink-2: #98a2b3;
+    --ink-3: #6b7280;
 
-    --poppy: #e8794b;
-    --poppy-hover: #f08a5e;
-    --sage: #a9ad86;
-    --dusty: #8aa6c6;
-    --sun: #ddd095;
-    --on-sun: #2b2618;
-    --brick: #d4604a;
+    --coral: #f57a5d;
+    --coral-hover: #ff8b6e;
 
-    --bubble-user: #33465a;
-    --bubble-user-ink: #e4edf6;
-    --bubble-coach: #383129;
-    --bubble-coach-ink: #f2e7db;
+    --blue: #60a5fa;
+    --blue-strong: #93c5fd;
+    --on-blue-strong: #14161a;
+
+    --amber: #fbbf24;
+    --on-amber: #241a02;
+
+    --red: #f87171;
+
+    --bubble-coach: #23272f;
+    --bubble-coach-ink: #f2f4f7;
+    --bubble-user: #3a2620;
+    --bubble-user-ink: #fbe6df;
   }
 }
 
 :root.dark {
-  --page: #211d19;
-  --card: #2b2621;
-  --line: #453d35;
-  --fill: #332d27;
-  --fill-2: #383129;
+  --page: #14161a;
+  --card: #1c1f26;
+  --line: #2c313a;
+  --fill: #23272f;
+  --fill-2: #1c1f26;
 
-  --ink: #f2e7db;
-  --ink-2: #b8ac9c;
-  --ink-3: #8b7f70;
+  --ink: #f2f4f7;
+  --ink-2: #98a2b3;
+  --ink-3: #6b7280;
 
-  --poppy: #e8794b;
-  --poppy-hover: #f08a5e;
-  --sage: #a9ad86;
-  --dusty: #8aa6c6;
-  --sun: #ddd095;
-  --on-sun: #2b2618;
-  --brick: #d4604a;
+  --coral: #f57a5d;
+  --coral-hover: #ff8b6e;
 
-  --bubble-user: #33465a;
-  --bubble-user-ink: #e4edf6;
-  --bubble-coach: #383129;
-  --bubble-coach-ink: #f2e7db;
+  --blue: #60a5fa;
+  --blue-strong: #93c5fd;
+  --on-blue-strong: #14161a;
+
+  --amber: #fbbf24;
+  --on-amber: #241a02;
+
+  --red: #f87171;
+
+  --bubble-coach: #23272f;
+  --bubble-coach-ink: #f2f4f7;
+  --bubble-user: #3a2620;
+  --bubble-user-ink: #fbe6df;
 }
 
 @theme inline {
@@ -99,13 +126,14 @@
   --color-ink-3: var(--ink-3);
   --color-on-accent: var(--on-accent);
 
-  --color-poppy: var(--poppy);
-  --color-poppy-hover: var(--poppy-hover);
-  --color-sage: var(--sage);
-  --color-dusty: var(--dusty);
-  --color-sun: var(--sun);
-  --color-on-sun: var(--on-sun);
-  --color-brick: var(--brick);
+  --color-coral: var(--coral);
+  --color-coral-hover: var(--coral-hover);
+  --color-blue: var(--blue);
+  --color-blue-strong: var(--blue-strong);
+  --color-on-blue-strong: var(--on-blue-strong);
+  --color-amber: var(--amber);
+  --color-on-amber: var(--on-amber);
+  --color-red: var(--red);
 
   --color-bubble-user: var(--bubble-user);
   --color-bubble-user-ink: var(--bubble-user-ink);
@@ -124,7 +152,7 @@
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
   }
-  /* Borders are 0.5px per the brand spec; fall back to 1px where unsupported. */
+  /* Hairline dividers; 0.5px where the browser supports it. */
   .hairline {
     border-width: 1px;
     border-color: var(--line);
@@ -135,7 +163,7 @@
     }
   }
   *:focus-visible {
-    outline: 2px solid var(--dusty);
+    outline: 2px solid var(--blue);
     outline-offset: 2px;
   }
 }

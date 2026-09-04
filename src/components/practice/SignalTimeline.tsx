@@ -8,7 +8,7 @@ import type { SignalSample } from "@/lib/types";
  * Deliberately not one chart with three lines, because these have unrelated meanings
  * and overlaying them would invite comparisons that aren't there.
  *
- * Every row is the same dusty blue. The row label carries identity, so colour
+ * Every row is the same blue. The row label carries identity, so colour
  * doesn't have to, which also keeps it readable for colour-blind viewers.
  */
 const ROWS = [
@@ -99,11 +99,11 @@ export default function SignalTimeline({ samples }: { samples: SignalSample[] })
                 className="overflow-visible"
               >
                 <rect x={0} y={0} width={W} height={H} rx={3} fill="var(--fill)" />
-                <path d={area} fill="var(--dusty)" opacity={0.16} />
+                <path d={area} fill="var(--blue)" opacity={0.16} />
                 <path
                   d={path}
                   fill="none"
-                  stroke="var(--dusty)"
+                  stroke="var(--blue)"
                   strokeWidth={2}
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -136,7 +136,7 @@ export default function SignalTimeline({ samples }: { samples: SignalSample[] })
                       cx={xFor(active)}
                       cy={H - valueOf(active, row.key) * H}
                       r={3.5}
-                      fill="var(--dusty)"
+                      fill="var(--blue)"
                       stroke="var(--card)"
                       strokeWidth={2}
                       vectorEffect="non-scaling-stroke"

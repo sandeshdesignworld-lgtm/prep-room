@@ -33,8 +33,10 @@ export interface Sample {
 export const FACING_YAW_DEG = 18;
 export const FACING_PITCH_DEG = 14;
 
-/** Mean per-frame nose travel (normalised units) that counts as fully fidgety. */
+/** Mean per-step nose travel (normalised units) that counts as fully fidgety. */
 export const FIDGET_FULL_SCALE = 0.012;
+/** The sampling step FIDGET_FULL_SCALE is calibrated against. */
+export const FIDGET_NOMINAL_MS = 100;
 
 /** Shoulder-width ratios mapped onto 0-1 openness. */
 export const OPENNESS_MIN_RATIO = 0.75;
@@ -137,8 +139,15 @@ export function openness(width: number, baseline: number): number {
   return clamp01((ratio - OPENNESS_MIN_RATIO) / OPENNESS_RANGE);
 }
 
-/** Mean frame-to-frame nose travel across the window, scaled to 0-1. */
-export function fidget(noseWindow: Point[]): number {
+/**
+ * Mean nose travel across the window, scaled to 0-1.
+ *
+ * Travel per sample depends on how often we sample, so it is normalised to a
+ * nominal 100ms step before being scored. Without that, moving pose detection
+ * from 10Hz to 7.5Hz would inflate every reading by a third and quietly
+ * invalidate FIDGET_FULL_SCALE and every threshold built on it.
+ */
+export function fidget(noseWindow: Point[], intervalMs = FIDGET_NOMINAL_MS): number {
   if (noseWindow.length < 2) return 0;
   let total = 0;
   for (let i = 1; i < noseWindow.length; i++) {
@@ -147,7 +156,9 @@ export function fidget(noseWindow: Point[]): number {
       noseWindow[i].y - noseWindow[i - 1].y
     );
   }
-  return clamp01(total / (noseWindow.length - 1) / FIDGET_FULL_SCALE);
+  const perSample = total / (noseWindow.length - 1);
+  const perNominalStep = perSample * (FIDGET_NOMINAL_MS / Math.max(1, intervalMs));
+  return clamp01(perNominalStep / FIDGET_FULL_SCALE);
 }
 
 /* ------------------------------ the nudge -------------------------------- */
@@ -159,6 +170,104 @@ export function fidget(noseWindow: Point[]): number {
  */
 export function nudgeLevel(s: Pick<Sample, "facing" | "fidget" | "openness">): number {
   return clamp01(0.5 * (1 - s.facing) + 0.3 * s.fidget + 0.2 * (1 - s.openness));
+}
+
+/* ------------------------------ the live read ---------------------------- */
+
+/**
+ * The three pills shown over the camera during a roleplay. This is the ONLY
+ * thing the user sees about their own delivery while they are still talking,
+ * and it is deliberately not coaching: no sentences, no score, no advice, and
+ * nothing that names a feeling. Two words and a coloured dot, so a glance costs
+ * nothing and ignoring it costs nothing either.
+ *
+ * "attention" means a signal has drifted, not that the user is doing badly.
+ * What it means is the debrief's job.
+ */
+export type SignalStatus = "good" | "attention";
+
+export interface LiveRead {
+  /** Head pointed at the camera often enough over the recent window. */
+  eyeContact: SignalStatus;
+  /** Shoulders squared against this person's own opening baseline. */
+  posture: SignalStatus;
+  /** Head movement low enough to read as settled. */
+  steady: SignalStatus;
+}
+
+/** Share of the recent window spent facing the camera that still reads as engaged. */
+export const EYE_CONTACT_GOOD_RATIO = 0.55;
+/**
+ * Openness is already relative to the person's own baseline, so this is a floor
+ * rather than a band: below it they have turned away or folded in. There is no
+ * upper bound, because sitting up straighter than you started is not a fault.
+ */
+export const POSTURE_GOOD_MIN = 0.3;
+/** Smoothed movement above this reads as restless rather than settled. */
+export const STEADY_MAX = 0.45;
+/**
+ * How long a condition must hold before a pill is allowed to change, in either
+ * direction. This is the whole reason the pills are calm enough to sit next to
+ * a conversation: without it they flicker on every glance away and become the
+ * mid-roleplay interruption the brief forbids.
+ */
+export const STATUS_HOLD_MS = 800;
+
+/** The smoothed window a read is taken from. */
+export interface SignalWindow {
+  /** Fraction of recent samples with the head pointed at the camera, 0-1. */
+  eyeContactRatio: number;
+  /** Smoothed shoulder openness, 0-1. */
+  openness: number;
+  /** Smoothed head movement, 0-1. */
+  fidget: number;
+}
+
+/** The status each signal would have right now, before any debouncing. */
+export function readCandidates(w: SignalWindow): LiveRead {
+  return {
+    eyeContact: w.eyeContactRatio > EYE_CONTACT_GOOD_RATIO ? "good" : "attention",
+    posture: w.openness >= POSTURE_GOOD_MIN ? "good" : "attention",
+    steady: w.fidget <= STEADY_MAX ? "good" : "attention",
+  };
+}
+
+/**
+ * One pill's debounce state. `pending` is the status being considered; it only
+ * becomes `status` once it has held for STATUS_HOLD_MS without wavering.
+ */
+export interface StatusGate {
+  status: SignalStatus;
+  pending: SignalStatus | null;
+  pendingSince: number;
+}
+
+export function newGate(status: SignalStatus = "good"): StatusGate {
+  return { status, pending: null, pendingSince: 0 };
+}
+
+/**
+ * Advances one gate. Returns the previous object unchanged when nothing moved,
+ * so callers can compare by identity and skip a re-render.
+ */
+export function gateStatus(
+  prev: StatusGate,
+  candidate: SignalStatus,
+  now: number,
+  holdMs = STATUS_HOLD_MS
+): StatusGate {
+  if (candidate === prev.status) {
+    // Back to where we already were: forget any part-served waiting period.
+    return prev.pending === null ? prev : newGate(prev.status);
+  }
+  if (prev.pending !== candidate) {
+    // A new direction; start its clock.
+    return { status: prev.status, pending: candidate, pendingSince: now };
+  }
+  if (now - prev.pendingSince >= holdMs) {
+    return newGate(candidate);
+  }
+  return prev;
 }
 
 /* ------------------------------- rollups --------------------------------- */

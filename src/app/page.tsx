@@ -3,7 +3,7 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import Welcome from "@/components/onboarding/Welcome";
 import Setup from "@/components/onboarding/Setup";
-import Chat from "@/components/advisor/Chat";
+import Room from "@/components/room/Room";
 import AppShell, { type View } from "@/components/app/AppShell";
 import HistoryView from "@/components/app/HistoryView";
 import ProgressView from "@/components/app/ProgressView";
@@ -84,7 +84,7 @@ export default function Home() {
   return (
     <AppShell view={view} onChange={setView}>
       {view === "advisor" && (
-        <Chat key={session.id} profile={profile} initialSession={session} />
+        <Room key={session.id} profile={profile} initialSession={session} />
       )}
 
       {view === "history" && (
