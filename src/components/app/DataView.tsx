@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteEverything, exportEverything } from "@/lib/storage";
+import { useTheme, type Theme } from "@/lib/theme";
 import { shortDate } from "@/lib/progress";
 import type { Profile, Session } from "@/lib/types";
 
@@ -10,6 +11,11 @@ const KEPT = [
   "Your practice transcripts, the score, and the debrief notes.",
   "If you used the camera: a handful of numbers per second: whether your head was pointed at the screen, how much you moved, how square your shoulders were.",
   "The few lines you gave us at setup about yourself and what you wanted.",
+];
+
+const THEMES: { id: Theme; label: string; note: string }[] = [
+  { id: "light", label: "Light", note: "The default" },
+  { id: "dark", label: "Dark", note: "Same colours, dark ground" },
 ];
 
 const NEVER = [
@@ -29,6 +35,7 @@ export default function DataView({
   onWiped: () => void;
   onOpenHistory: () => void;
 }) {
+  const { theme, setTheme } = useTheme();
   const [confirming, setConfirming] = useState(false);
   const [exported, setExported] = useState(false);
 
@@ -88,6 +95,34 @@ export default function DataView({
           </a>
           .
         </p>
+      </section>
+
+      <section className="mt-4 rounded-2xl border bg-card hairline p-5">
+        <h2 className="text-sm font-semibold text-ink">Appearance</h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-2">
+          PrepRoom is light by default and stays that way whatever your device is set to. Dark
+          is here if you want it, and it&apos;s remembered on this device only.
+        </p>
+        <div className="mt-3 grid max-w-xs grid-cols-2 gap-2">
+          {THEMES.map((opt) => {
+            const selected = theme === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setTheme(opt.id)}
+                aria-pressed={selected}
+                className={[
+                  "rounded-xl border px-3 py-2.5 text-left transition-colors",
+                  selected ? "border-blue bg-blue/10" : "bg-card hairline hover:bg-fill-2",
+                ].join(" ")}
+              >
+                <span className="block text-sm font-medium text-ink">{opt.label}</span>
+                <span className="mt-0.5 block text-xs text-ink-2">{opt.note}</span>
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       <section className="mt-4 rounded-2xl border bg-card hairline p-5">

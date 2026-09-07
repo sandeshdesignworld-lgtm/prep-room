@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTheme } from "@/lib/theme";
 
 export type View = "advisor" | "history" | "progress" | "data";
 
@@ -18,6 +19,23 @@ function HomeIcon() {
     <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
       <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19v-8.5Z" stroke="currentColor" strokeLinejoin="round" />
       <path d="M9.5 20.5V14h5v6.5" stroke="currentColor" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <circle cx="12" cy="12" r="4" stroke="currentColor" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5Z" stroke="currentColor" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -118,6 +136,8 @@ export default function AppShell({
 }) {
   const homeActive = atHome && view === "advisor";
   const items = [...NAV, PROFILE];
+  const { theme, toggle } = useTheme();
+  const dark = theme === "dark";
 
   return (
     <div className="flex h-dvh flex-col md:flex-row">
@@ -146,7 +166,16 @@ export default function AppShell({
             <item.icon />
           </NavButton>
         ))}
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col items-center gap-1">
+          {/* Not navigation, so it never reads as active. It's the one switch
+              between the two palettes, and light is where it starts. */}
+          <NavButton
+            label={dark ? "Switch to light" : "Switch to dark"}
+            active={false}
+            onClick={toggle}
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+          </NavButton>
           <NavButton
             label={PROFILE.label}
             active={view === PROFILE.id}

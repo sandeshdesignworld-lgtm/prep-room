@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -28,17 +29,21 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Browser chrome can't read CSS variables, so these two mirror --page in
-  // globals.css. They are the only hex values outside that file, so keep them in sync.
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#14161a" },
-  ],
+  // One value, not a light/dark pair: the app is light unless the user has
+  // chosen otherwise, and the system preference must not decide this either.
+  // Mirrors --page in globals.css; applyTheme() in lib/theme.ts swaps it when
+  // the toggle is used. The only hex outside that file, so keep it in sync.
+  themeColor: "#f7f8fa",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
+      <head>
+        {/* Before first paint, so a user who chose dark never sees a white
+            flash, and everyone else never sees dark at all. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

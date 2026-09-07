@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
-/* Dark mode is class-driven so one switch controls it (see ThemeScript). */
+/*
+ * Dark mode is class-driven and OPT-IN. Crisp White is the app, and it is what
+ * every mockup and every screenshot is; a user whose laptop happens to be set
+ * to dark should still get it. So there is no prefers-color-scheme rule
+ * anywhere below: the ONLY thing that turns this dark is the `dark` class on
+ * <html>, put there by the user's own choice (see src/lib/theme.ts, applied
+ * before first paint by the script in layout.tsx).
+ */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
@@ -51,40 +58,8 @@
 
 /*
  * Neutral dark: clean grays, never murky, with the same coral and blue lifted
- * for a dark ground. Written twice, once for the system preference and once
- * for the explicit class, so the toggle wins both ways.
+ * for a dark ground. Reached only by the toggle, never by the system setting.
  */
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --page: #14161a;
-    --card: #1c1f26;
-    --line: #2c313a;
-    --fill: #23272f;
-    --fill-2: #1c1f26;
-
-    --ink: #f2f4f7;
-    --ink-2: #98a2b3;
-    --ink-3: #6b7280;
-
-    --coral: #f57a5d;
-    --coral-hover: #ff8b6e;
-
-    --blue: #60a5fa;
-    --blue-strong: #93c5fd;
-    --on-blue-strong: #14161a;
-
-    --amber: #fbbf24;
-    --on-amber: #241a02;
-
-    --red: #f87171;
-
-    --bubble-coach: #23272f;
-    --bubble-coach-ink: #f2f4f7;
-    --bubble-user: #3a2620;
-    --bubble-user-ink: #fbe6df;
-  }
-}
-
 :root.dark {
   --page: #14161a;
   --card: #1c1f26;
@@ -146,8 +121,16 @@
 }
 
 @layer base {
+  /*
+   * Light unless the class says otherwise. `light dark` here would let the OS
+   * paint form controls, scrollbars and the canvas dark underneath a light
+   * page, which is most of what made this look dark in the first place.
+   */
   html {
-    color-scheme: light dark;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     background-color: var(--page);
