@@ -24,16 +24,49 @@
 export const SILENCE_MS = 1500;
 
 /**
- * Root-mean-square level that counts as possibly-speech, and the lower level it
- * has to fall back through before the silence clock starts. The gap between
- * them is hysteresis: without it, the dip between two words restarts the whole
- * thing every syllable.
+ * The quietest level that can ever count as speech, whatever the room is doing,
+ * and the level it has to fall back through before the silence clock starts.
+ * The gap between them is hysteresis: without it, the dip between two words
+ * restarts the whole thing every syllable.
  *
- * Calibrated against getUserMedia with the browser's own gain control on, where
- * ordinary room noise sits around 0.005-0.02 and speech runs 0.05-0.2.
+ * These are a FLOOR, not the threshold. In a quiet room they are the threshold;
+ * in a noisy one the threshold rises above them, because a fixed number that
+ * works at a desk at night counts a cafe as one continuous sentence. See
+ * speechThresholds().
  */
 export const SPEECH_ON_RMS = 0.035;
 export const SPEECH_OFF_RMS = 0.02;
+
+/**
+ * How far above the room's own noise the user has to be before it counts.
+ *
+ * Someone talking to you is much louder at your microphone than someone talking
+ * across the room, so a threshold set relative to the ambient level separates
+ * them where a fixed one cannot. It is not magic: a loud voice close by will
+ * still register, and no amount of arithmetic can tell a flatmate leaning over
+ * your shoulder from you. It handles the common case, which is a room with
+ * other people in it several feet away.
+ */
+export const SPEECH_OVER_NOISE = 2.8;
+/** Hysteresis, applied to the noise-relative threshold as well as the floor. */
+export const RELEASE_RATIO = 0.6;
+
+/**
+ * How fast the noise floor follows the room, down and up.
+ *
+ * Asymmetric on purpose. Down is quick, so leaving a noisy room does not leave
+ * the threshold stranded high and the user unheard. Up is slow, so a door
+ * slamming does not raise the bar for the next ten seconds. Per audio frame, at
+ * roughly 20 a second.
+ */
+export const NOISE_FALL = 0.25;
+export const NOISE_RISE = 0.004;
+
+/**
+ * Above this the room is loud enough that hands-free listening will misfire,
+ * and tap to talk is the better default. Roughly a busy cafe.
+ */
+export const NOISY_ROOM_RMS = 0.045;
 
 /**
  * How long the level has to stay up before it counts. This is the noise-blip
@@ -51,12 +84,37 @@ export const SPEECH_MIN_MS = 140;
 export interface SpeechGate {
   speaking: boolean;
   risingSince: number;
+  /** Rolling estimate of the room's own level, with the user not talking. */
+  noiseFloor: number;
 }
 
 const NOT_RISING = -1;
 
 export function newSpeechGate(): SpeechGate {
-  return { speaking: false, risingSince: NOT_RISING };
+  return { speaking: false, risingSince: NOT_RISING, noiseFloor: 0 };
+}
+
+/**
+ * What counts as speech right now, given how loud the room already is.
+ *
+ * Never below the absolute floor: in a silent room the noise estimate tends to
+ * zero, and a threshold that went with it would call the microphone's own hiss
+ * a sentence.
+ */
+export function speechThresholds(noiseFloor: number): { on: number; off: number } {
+  const on = Math.max(SPEECH_ON_RMS, noiseFloor * SPEECH_OVER_NOISE);
+  return { on, off: Math.max(SPEECH_OFF_RMS, on * RELEASE_RATIO) };
+}
+
+/**
+ * Follows the room while the user is not talking.
+ *
+ * Only ever called with non-speech frames, so the user's own voice never raises
+ * the bar they have to clear.
+ */
+export function adaptNoiseFloor(noiseFloor: number, level: number): number {
+  const rate = level < noiseFloor ? NOISE_FALL : NOISE_RISE;
+  return noiseFloor + (level - noiseFloor) * rate;
 }
 
 /**
@@ -70,20 +128,29 @@ export function advanceGate(
   now: number,
   minMs = SPEECH_MIN_MS
 ): SpeechGate {
+  const { on, off } = speechThresholds(prev.noiseFloor);
+
   if (prev.speaking) {
-    // It takes a clear drop to call it silence, not just a quiet syllable.
-    return level > SPEECH_OFF_RMS ? prev : newSpeechGate();
+    // It takes a clear drop to call it silence, not just a quiet syllable. The
+    // noise floor is left alone while someone is talking: this is not a sample
+    // of the room, it is a sample of them.
+    if (level > off) return prev;
+    return { speaking: false, risingSince: NOT_RISING, noiseFloor: prev.noiseFloor };
   }
-  if (level < SPEECH_ON_RMS) {
-    return prev.risingSince < 0 ? prev : newSpeechGate();
+
+  // Not speech, so it is the room, so it is what the floor is made of.
+  const noiseFloor = level < on ? adaptNoiseFloor(prev.noiseFloor, level) : prev.noiseFloor;
+
+  if (level < on) {
+    return { speaking: false, risingSince: NOT_RISING, noiseFloor };
   }
   if (prev.risingSince < 0) {
-    return { speaking: false, risingSince: now };
+    return { speaking: false, risingSince: now, noiseFloor };
   }
   if (now - prev.risingSince >= minMs) {
-    return { speaking: true, risingSince: prev.risingSince };
+    return { speaking: true, risingSince: prev.risingSince, noiseFloor };
   }
-  return prev;
+  return { speaking: false, risingSince: prev.risingSince, noiseFloor };
 }
 
 /** Level of one frame of time-domain audio, 0-1. */

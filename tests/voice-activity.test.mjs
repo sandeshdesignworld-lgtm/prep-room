@@ -1,6 +1,7 @@
 import {
   advanceGate, newSpeechGate, rms, silenceRemaining, shouldSend,
-  lastHeard,
+  lastHeard, speechThresholds, adaptNoiseFloor,
+  SPEECH_OVER_NOISE, NOISY_ROOM_RMS,
   SILENCE_MS, SPEECH_ON_RMS, SPEECH_OFF_RMS, SPEECH_MIN_MS, MIN_VISIBLE_MS,
 } from "../.test-build/voice-activity.js";
 
@@ -60,8 +61,12 @@ ok("starts quiet", newSpeechGate().speaking === false);
 }
 
 {
+  // The gate no longer returns itself on a quiet frame, because the noise floor
+  // moves on every one of them. What must not move is the verdict.
   let g = newSpeechGate();
-  ok("quiet on quiet is the same object", advanceGate(g, QUIET, 0) === g);
+  const next = advanceGate(g, QUIET, 0);
+  ok("a quiet frame is still not speech", next.speaking === false);
+  ok("and it is still not rising", next.risingSince < 0);
 }
 
 /* ---------------------------- the countdown ----------------------------- */
@@ -91,6 +96,51 @@ ok(
   "then goes once it has had it",
   shouldSend({ lastSpeechAt: 1, armedAt: 5000, now: 5000 + MIN_VISIBLE_MS + 50 }) === true
 );
+
+/* ------------------------------ a noisy room ---------------------------- */
+
+console.log("--- thresholds follow the room ---");
+ok("a silent room uses the absolute floor",
+  speechThresholds(0).on === SPEECH_ON_RMS);
+ok("so does a very quiet one, rather than chasing the hiss down",
+  speechThresholds(0.001).on === SPEECH_ON_RMS);
+{
+  const noisy = speechThresholds(0.05);
+  ok("a noisy room raises the bar", noisy.on > SPEECH_ON_RMS);
+  near("to a fixed multiple of the noise", noisy.on, 0.05 * SPEECH_OVER_NOISE, 1e-9);
+  ok("release stays below onset, so words don't chop", noisy.off < noisy.on);
+}
+
+console.log("--- the floor follows the room ---");
+{
+  // Down in a handful of frames, not a handful of seconds.
+  let f = 0.05;
+  for (let i = 0; i < 10; i++) f = adaptNoiseFloor(f, 0.01);
+  ok("falls to the new quiet within half a second", f < 0.015);
+}
+ok("rises slowly when it gets loud",
+  adaptNoiseFloor(0.01, 0.20) < 0.02);
+{
+  // A cafe: ambient chatter well above the old fixed threshold. It must settle
+  // as noise rather than being taken for the user talking.
+  let g = newSpeechGate();
+  for (let i = 0; i < 400; i++) g = advanceGate(g, 0.030, i * 50);
+  ok("sustained chatter is never called speech", g.speaking === false);
+  ok("and becomes the floor instead", g.noiseFloor > 0.02);
+  // The user, close to the mic, is far louder than the room.
+  const before = g.noiseFloor;
+  for (let i = 0; i < 20; i++) g = advanceGate(g, 0.25, 20000 + i * 50);
+  ok("the user still gets through in that room", g.speaking === true);
+  ok("and their voice does not raise the floor", g.noiseFloor === before);
+}
+{
+  // The same chatter level in a room that was quiet a moment ago: with the old
+  // fixed threshold this was speech, which is the bug.
+  let quiet = newSpeechGate();
+  for (let i = 0; i < 400; i++) quiet = advanceGate(quiet, 0.004, i * 50);
+  ok("a quiet room keeps a low floor", quiet.noiseFloor < 0.01);
+}
+ok("the noisy-room mark is above ordinary quiet", NOISY_ROOM_RMS > SPEECH_OFF_RMS);
 
 /* ---------------------------- which clock wins -------------------------- */
 

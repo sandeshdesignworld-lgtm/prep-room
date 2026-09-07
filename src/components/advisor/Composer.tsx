@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { dictationErrorCopy } from "@/lib/speech";
 import { joinSpoken } from "@/lib/speech-text";
 import { SILENCE_MS } from "@/lib/voice-activity";
-import type { VoiceLoop } from "@/lib/voice-loop";
+import type { MicMode, VoiceLoop } from "@/lib/voice-loop";
 
 function MicIcon({ active }: { active: boolean }) {
   return (
@@ -53,6 +53,8 @@ export default function Composer({
   voice,
   autoSend,
   onToggleAutoSend,
+  micMode,
+  onMicModeChange,
   micOn,
 }: {
   value: string;
@@ -66,6 +68,8 @@ export default function Composer({
   voice: VoiceLoop;
   autoSend: boolean;
   onToggleAutoSend: () => void;
+  micMode: MicMode;
+  onMicModeChange: (mode: MicMode) => void;
   /**
    * False when the call's mic is muted. The mic button disappears rather than
    * sitting there disabled, so there is one obvious place to unmute: the call
@@ -98,13 +102,20 @@ export default function Composer({
     onSend(text);
   }
 
+  const tap = micMode === "tap";
   const status = error
     ? dictationErrorCopy(error)
-    : listening
-      ? autoSend
-        ? "Listening. Stop talking and it sends on its own."
-        : "Listening. Tap the mic when you're done."
-      : hint;
+    : voice.heldForCoach
+      ? "Your coach is talking. The mic comes back when they finish."
+      : listening
+        ? tap
+          ? "Listening. Tap the mic again when you're done."
+          : autoSend
+            ? "Listening. Stop talking and it sends on its own."
+            : "Listening. Tap the mic when you're done."
+        : tap
+          ? "Tap the mic, say your piece, tap it again."
+          : hint;
 
   return (
     <div
@@ -141,13 +152,22 @@ export default function Composer({
             <button
               type="button"
               onClick={voice.toggle}
+              disabled={voice.heldForCoach}
               aria-pressed={listening}
-              aria-label={listening ? "Stop listening" : "Speak instead of typing"}
+              aria-label={
+                voice.heldForCoach
+                  ? "Your coach is talking"
+                  : listening
+                    ? "Stop listening"
+                    : "Speak instead of typing"
+              }
               className={[
                 "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
-                listening
-                  ? "bg-blue-strong text-on-blue-strong"
-                  : "text-ink-2 hover:bg-fill-2 hover:text-ink",
+                voice.heldForCoach
+                  ? "text-ink-3"
+                  : listening
+                    ? "bg-blue-strong text-on-blue-strong"
+                    : "text-ink-2 hover:bg-fill-2 hover:text-ink",
               ].join(" ")}
             >
               {listening && (
@@ -162,24 +182,54 @@ export default function Composer({
             </button>
           )}
           {supported && (
-            <button
-              type="button"
-              onClick={onToggleAutoSend}
-              aria-pressed={autoSend}
-              title={
-                autoSend
-                  ? `Your turn sends itself after ${SILENCE_MS / 1000}s of quiet`
-                  : "You send each turn yourself"
-              }
-              className={[
-                "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
-                autoSend
-                  ? "border-blue bg-blue/12 text-ink"
-                  : "hairline bg-card text-ink-3 hover:bg-fill",
-              ].join(" ")}
-            >
-              Auto-send {autoSend ? "on" : "off"}
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {/* Two ways to use a microphone, one switch. Hands-free is better
+                  where it works; tap to talk is the one that works anywhere. */}
+              <div className="flex overflow-hidden rounded-full border hairline">
+                {(
+                  [
+                    { id: "auto" as const, label: "Hands free", hint: "Picks up when you talk, sends when you stop" },
+                    { id: "tap" as const, label: "Tap to talk", hint: "Listens only between taps. Better in a noisy room" },
+                  ]
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onMicModeChange(opt.id)}
+                    aria-pressed={micMode === opt.id}
+                    title={opt.hint}
+                    className={[
+                      "px-2 py-0.5 text-[11px] font-medium transition-colors",
+                      micMode === opt.id
+                        ? "bg-blue/12 text-ink"
+                        : "bg-card text-ink-3 hover:bg-fill",
+                    ].join(" ")}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {!tap && (
+                <button
+                  type="button"
+                  onClick={onToggleAutoSend}
+                  aria-pressed={autoSend}
+                  title={
+                    autoSend
+                      ? `Your turn sends itself after ${SILENCE_MS / 1000}s of quiet`
+                      : "You send each turn yourself"
+                  }
+                  className={[
+                    "rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    autoSend
+                      ? "border-blue bg-blue/12 text-ink"
+                      : "hairline bg-card text-ink-3 hover:bg-fill",
+                  ].join(" ")}
+                >
+                  Auto-send {autoSend ? "on" : "off"}
+                </button>
+              )}
+            </div>
           )}
           <span
             className={`truncate text-xs ${error ? "text-red" : "text-ink-3"}`}

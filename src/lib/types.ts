@@ -23,6 +23,12 @@ export interface Profile {
    * voice-first product and pressing Send every turn is what it's avoiding.
    */
   autoSend?: boolean;
+  /**
+   * How the mic behaves: "auto" listens hands-free, "tap" only between taps.
+   * Undefined means the user has not chosen, which lets a loud room move it to
+   * "tap" once on their behalf.
+   */
+  micMode?: "auto" | "tap";
   /** Bulbul speaker id. Undefined means the server default. */
   voice?: string;
   /**

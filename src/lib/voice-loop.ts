@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDictation, type DictationError } from "./speech";
 import { useMicActivity } from "./mic";
 import { joinSpoken } from "./speech-text";
-import { lastHeard, shouldSend, silenceRemaining } from "./voice-activity";
+import { lastHeard, shouldSend, silenceRemaining, NOISY_ROOM_RMS } from "./voice-activity";
 
 /**
  * The voice half of a turn, in one place: what the user said, when they stopped
@@ -26,6 +26,22 @@ import { lastHeard, shouldSend, silenceRemaining } from "./voice-activity";
 /** How often the countdown is recomputed. 15 renders across the window. */
 const COUNTDOWN_TICK_MS = 100;
 
+/** Long enough for the noise floor to mean something before it is read. */
+const NOISE_SETTLE_MS = 4000;
+
+/**
+ * How the microphone behaves.
+ *
+ * "auto" is hands-free: it picks up when you start talking and sends when you
+ * stop. Lovely at a desk, unusable in a room with other people in it, because
+ * every one of those decisions is a guess about whose voice it just heard.
+ *
+ * "tap" is the honest fallback: it listens only between one tap and the next,
+ * and sends when you stop it. No guessing, no picking up on a flatmate, no turn
+ * held open by a television.
+ */
+export type MicMode = "auto" | "tap";
+
 export interface VoiceLoop {
   /** Does this browser do speech recognition at all. */
   supported: boolean;
@@ -43,10 +59,19 @@ export interface VoiceLoop {
   cancelPending: () => void;
   /** False when the level meter isn't running, so the copy can stay honest. */
   levelAvailable: boolean;
+  /** Recognition is deliberately off because the coach is talking. */
+  heldForCoach: boolean;
+  /**
+   * The room is loud enough that hands-free listening will misfire. Set once,
+   * from the ambient level, so the room can suggest tap to talk rather than
+   * the user having to work out why it keeps interrupting them.
+   */
+  noisyRoom: boolean;
 }
 
 export function useVoiceLoop({
   micOn,
+  mode,
   autoSend,
   hasDraft,
   busy,
@@ -57,6 +82,7 @@ export function useVoiceLoop({
   onInterrupt,
 }: {
   micOn: boolean;
+  mode: MicMode;
   autoSend: boolean;
   /** Is there anything committed to send yet. */
   hasDraft: boolean;
@@ -144,20 +170,68 @@ export function useVoiceLoop({
     onInterruptRef.current();
   }, [interim]);
 
+  /* ------------------- while the coach is talking, don't listen ------------ */
+
+  /**
+   * Recognition is stopped for as long as the coach is speaking, and put back
+   * when it stops.
+   *
+   * The coach comes out of the speakers and goes straight back into the
+   * microphone. Speech recognition opens its own audio stream that we cannot
+   * put echo cancellation on, so it hears the coach clearly, transcribes it,
+   * and hands it back as though the user had said it. That is the feedback
+   * loop: the coach answers itself, the turn sends early, and with the avatar
+   * playing at the same time the audio breaks up.
+   *
+   * Barge-in survives this. It runs off the level meter below, which has echo
+   * cancellation and is a different stream, so talking over the coach still
+   * stops it and hands the microphone straight back.
+   */
+  const wasHeldRef = useRef(false);
+  useEffect(() => {
+    if (coachSpeaking && listening) {
+      wasHeldRef.current = true;
+      stop();
+      return;
+    }
+    // Back to the user's turn. Only resume what we ourselves interrupted, and
+    // only in the hands-free mode: tap to talk means the mic starts when the
+    // user says it starts.
+    if (!coachSpeaking && wasHeldRef.current) {
+      wasHeldRef.current = false;
+      if (mode === "auto" && micOn && supported) start();
+    }
+  }, [coachSpeaking, listening, mode, micOn, supported, start, stop]);
+
   /* --------------------------- barge-in and pickup ------------------------- */
 
   useEffect(() => {
     if (!mic.speaking) return;
     // Talking over the coach stops the coach. Nothing else interrupts it: the
     // reply stays on screen, it just stops being read out over the user.
-    if (coachSpeaking) onInterruptRef.current();
+    if (coachSpeaking) {
+      onInterruptRef.current();
+      wasHeldRef.current = true;
+    }
     // And someone who has already started talking shouldn't have to find a
     // button first. Without this the loop only runs once: auto-send stops the
     // recogniser to take the tail cleanly, and the next turn would need a tap.
-    // Gated on auto-send, so switching that off leaves the mic strictly
-    // push-to-talk, which is the point of switching it off.
-    if (autoSend && micOn && supported && !listening) start();
-  }, [mic.speaking, coachSpeaking, autoSend, micOn, supported, listening, start]);
+    // Hands-free only: tap to talk exists precisely so nothing picks itself up.
+    if (mode === "auto" && micOn && supported && !listening && !coachSpeaking) start();
+  }, [mic.speaking, coachSpeaking, mode, micOn, supported, listening, start]);
+
+  /* ----------------------------- a loud room ------------------------------- */
+
+  const [noisyRoom, setNoisyRoom] = useState(false);
+  useEffect(() => {
+    if (!micOn || !levelAvailable) return;
+    // Sampled a few seconds in, once the floor has had time to settle, and
+    // decided once rather than flapping as the room comes and goes.
+    const id = window.setTimeout(() => {
+      setNoisyRoom(mic.noiseFloor.current >= NOISY_ROOM_RMS);
+    }, NOISE_SETTLE_MS);
+    return () => window.clearTimeout(id);
+  }, [micOn, levelAvailable, mic.noiseFloor]);
 
   /** Muting the call has to actually stop the recogniser, not just hide it. */
   useEffect(() => {
@@ -178,7 +252,15 @@ export function useVoiceLoop({
     onSendRef.current(text);
   }, [stop]);
 
-  const armed = autoSend && listening && !busy && (hasDraft || interim.trim().length > 0);
+  // Never while the coach is talking, and never in tap to talk, where the
+  // user ends their own turn.
+  const armed =
+    mode === "auto" &&
+    autoSend &&
+    listening &&
+    !busy &&
+    !coachSpeaking &&
+    (hasDraft || interim.trim().length > 0);
 
   useEffect(() => {
     if (!armed) return;
@@ -233,5 +315,7 @@ export function useVoiceLoop({
     countdownMs,
     cancelPending,
     levelAvailable,
+    heldForCoach: coachSpeaking && !listening,
+    noisyRoom,
   };
 }

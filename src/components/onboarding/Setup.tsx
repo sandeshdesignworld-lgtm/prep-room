@@ -37,6 +37,9 @@ export default function Setup({ onDone }: { onDone: (profile: Profile) => void }
       speakReplies: inputPreference === "voice" && support.speaking,
       // On by default: the whole point of talking is not reaching for a button.
       autoSend: true,
+      // Left unset on purpose. Hands-free is the default behaviour, and leaving
+      // this undefined is what lets a loud room switch to tap to talk once,
+      // without overriding a choice the user has actually made.
       // On by default too, and it costs nothing when it isn't configured.
       avatar: true,
       // Phase 3/4. Off by default, on purpose: the point is to compare.

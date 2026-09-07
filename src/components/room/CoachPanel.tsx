@@ -5,7 +5,7 @@ import Composer from "@/components/advisor/Composer";
 import MessageBubble from "@/components/advisor/MessageBubble";
 import CuePoints from "./CuePoints";
 import { MODES, MODE_ORDER } from "@/lib/modes";
-import type { VoiceLoop } from "@/lib/voice-loop";
+import type { MicMode, VoiceLoop } from "@/lib/voice-loop";
 import type { CuePoint, Message, ModeId } from "@/lib/types";
 
 /**
@@ -95,6 +95,8 @@ export default function CoachPanel({
   voice,
   autoSend,
   onToggleAutoSend,
+  micMode,
+  onMicModeChange,
   micOn,
   placeholder,
   hint,
@@ -119,6 +121,8 @@ export default function CoachPanel({
   voice: VoiceLoop;
   autoSend: boolean;
   onToggleAutoSend: () => void;
+  micMode: MicMode;
+  onMicModeChange: (mode: MicMode) => void;
   micOn: boolean;
   placeholder: string;
   hint: string;
@@ -223,6 +227,8 @@ export default function CoachPanel({
           voice={voice}
           autoSend={autoSend}
           onToggleAutoSend={onToggleAutoSend}
+          micMode={micMode}
+          onMicModeChange={onMicModeChange}
           micOn={micOn}
         />
         <p className="mt-1.5 px-1 text-center text-[11px] leading-relaxed text-ink-3">{footnote}</p>

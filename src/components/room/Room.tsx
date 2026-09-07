@@ -10,7 +10,7 @@ import { DIFFICULTIES, DIFFICULTY_LABEL, DIFFICULTY_NOTE } from "@/lib/scenario"
 import { getMode } from "@/lib/modes";
 import { useSpeaker } from "@/lib/speech";
 import { useAvatar } from "@/lib/avatar";
-import { useVoiceLoop } from "@/lib/voice-loop";
+import { useVoiceLoop, type MicMode } from "@/lib/voice-loop";
 import { joinSpoken } from "@/lib/speech-text";
 import {
   CAPTURE_MESSAGE,
@@ -73,6 +73,14 @@ export default function Room({
   // Older profiles predate the setting, and voice-first is the point, so the
   // absence of a stored preference means on.
   const [autoSend, setAutoSend] = useState(profile.autoSend ?? true);
+  /**
+   * Hands-free or tap to talk. Undefined on older profiles reads as hands-free,
+   * which is the better experience wherever it works; a loud room moves it to
+   * tap on its own, once, below.
+   */
+  const [micMode, setMicMode] = useState<MicMode>(profile.micMode ?? "auto");
+  /** So the room only ever suggests tap to talk once, and never overrides a choice. */
+  const chosenModeRef = useRef(profile.micMode !== undefined);
   // Same rule as auto-send: no stored preference means on. A coach with a face
   // is the default experience; the toggle is for people who'd rather not.
   const [avatarOn, setAvatarOn] = useState(profile.avatar ?? true);
@@ -89,7 +97,30 @@ export default function Room({
   }, [session]);
 
   const avatarContainerRef = useRef<HTMLDivElement | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  /**
+   * The coach request in flight, if any.
+   *
+   * `superseded` marks one we cancelled ourselves because a newer turn started.
+   * Those must not write their half-finished reply into the thread or raise an
+   * error at the user: they were replaced, not interrupted.
+   */
+  const abortRef = useRef<{ controller: AbortController; superseded: boolean } | null>(null);
+
+  /**
+   * Cancels whatever the coach is currently working on.
+   *
+   * Without this a second turn sent while the first was still streaming left
+   * two replies racing into the same thread, and a request that never settled
+   * left `busy` stuck true, which is the coach going permanently quiet. Newest
+   * turn wins, always.
+   */
+  const supersede = useCallback(() => {
+    const inFlight = abortRef.current;
+    if (!inFlight) return;
+    inFlight.superseded = true;
+    inFlight.controller.abort();
+    abortRef.current = null;
+  }, []);
   const startedAtRef = useRef<string>(new Date().toISOString());
   /** One read per rehearsal: a camera toggled off mid-practice doesn't restart it. */
   const analysedRef = useRef(false);
@@ -196,6 +227,7 @@ export default function Room({
    */
   const voice = useVoiceLoop({
     micOn,
+    mode: micMode,
     autoSend,
     hasDraft: draft.trim().length > 0,
     busy: busy || stage === "starting" || stage === "debriefing",
@@ -205,6 +237,16 @@ export default function Room({
     onSend: (text) => send(text),
     onInterrupt: cancelSpeech,
   });
+
+  // A loud room moves the mic to tap to talk, once, and only if the user has
+  // never expressed a preference. Hands-free listening in a room full of other
+  // voices interrupts people mid-sentence and sends half their turn, and being
+  // quietly switched to something reliable beats being told why it is failing.
+  useEffect(() => {
+    if (!voice.noisyRoom || chosenModeRef.current) return;
+    chosenModeRef.current = true;
+    setMicMode("tap");
+  }, [voice.noisyRoom]);
 
   /* ------------------------------ persistence ----------------------------- */
 
@@ -275,7 +317,8 @@ export default function Room({
       resetSpeech();
 
       const controller = new AbortController();
-      abortRef.current = controller;
+      const inFlight = { controller, superseded: false };
+      abortRef.current = inFlight;
 
       let received = "";
       try {
@@ -318,7 +361,13 @@ export default function Room({
           setError("The coach went quiet. Try sending that again.");
         }
       } catch (err) {
-        if (controller.signal.aborted) {
+        if (inFlight.superseded) {
+          // Replaced by a newer turn. Say nothing, keep nothing: the half a
+          // sentence this got through belongs to a question already moved on
+          // from, and dropping it into the thread would read as the coach
+          // answering something the user did not ask.
+          cancelSpeech();
+        } else if (controller.signal.aborted) {
           cancelSpeech();
           // Keep whatever arrived before the user hit stop; it's still useful.
           if (received.trim()) {
@@ -331,9 +380,13 @@ export default function Room({
           setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
         }
       } finally {
-        abortRef.current = null;
-        setBusy(false);
-        setStreamText("");
+        // Only the current request may hand the room back; a superseded one
+        // clearing `busy` would unblock the UI underneath its replacement.
+        if (abortRef.current === inFlight) {
+          abortRef.current = null;
+          setBusy(false);
+          setStreamText("");
+        }
       }
     },
     [
@@ -360,11 +413,19 @@ export default function Room({
       cancelSpeech();
       resetSpeech();
 
+      // Same rule as the advice thread: one line in flight, newest wins. A
+      // rehearsal is where turns come fastest, so this is where two replies
+      // racing into one transcript would show up first.
+      const controller = new AbortController();
+      const inFlight = { controller, superseded: false };
+      abortRef.current = inFlight;
+
       let received = "";
       try {
         const res = await fetch("/api/roleplay", {
           method: "POST",
           headers: { "content-type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
             mode: session.mode,
             scenario: active,
@@ -394,10 +455,17 @@ export default function Room({
           setError("They went quiet. Try that again.");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.");
+        if (inFlight.superseded || controller.signal.aborted) {
+          cancelSpeech();
+        } else {
+          setError(err instanceof Error ? err.message : "Something went wrong.");
+        }
       } finally {
-        setBusy(false);
-        setStreamText("");
+        if (abortRef.current === inFlight) {
+          abortRef.current = null;
+          setBusy(false);
+          setStreamText("");
+        }
       }
     },
     [scenario, session.mode, cancelSpeech, resetSpeech, feedSpeech, flushSpeech]
@@ -509,7 +577,12 @@ export default function Room({
   /** The one send path. Auto-send, the Send button and Enter all land here. */
   function send(explicit?: string) {
     const text = (explicit ?? draft).trim();
-    if (!text || busy) return;
+    if (!text) return;
+    // A turn arriving while the coach is still answering the last one replaces
+    // it rather than being dropped. Dropping it was how the coach went quiet:
+    // one request that never settled left `busy` true and every later turn
+    // silently discarded.
+    supersede();
     setDraft("");
 
     if (live) {
@@ -528,8 +601,9 @@ export default function Room({
     void requestReply(withUser);
   }
 
+  /** The Stop button. Keeps whatever arrived, unlike a superseded request. */
   function stop() {
-    abortRef.current?.abort();
+    abortRef.current?.controller.abort();
     cancelSpeech();
   }
 
@@ -554,6 +628,13 @@ export default function Room({
     const next = !avatarOn;
     setAvatarOn(next);
     saveProfile({ ...profile, avatar: next });
+  }
+
+  function setMicModeChoice(next: MicMode) {
+    chosenModeRef.current = true;
+    setMicMode(next);
+    if (next === "tap") voice.stop();
+    saveProfile({ ...profile, micMode: next });
   }
 
   function toggleAutoSend() {
@@ -842,6 +923,8 @@ export default function Room({
         voice={voice}
         autoSend={autoSend}
         onToggleAutoSend={toggleAutoSend}
+        micMode={micMode}
+        onMicModeChange={setMicModeChoice}
         micOn={micOn}
         placeholder={live ? "Say your line…" : mode.composerPlaceholder}
         hint={

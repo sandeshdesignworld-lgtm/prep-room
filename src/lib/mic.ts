@@ -32,12 +32,18 @@ export interface MicActivity {
    * second and nothing should re-render for it. The auto-send countdown polls it.
    */
   speechAt: RefObject<number>;
+  /**
+   * The room's own level, as the gate currently estimates it. Read to decide
+   * whether hands-free listening is a reasonable thing to offer here.
+   */
+  noiseFloor: RefObject<number>;
 }
 
 export function useMicActivity({ enabled }: { enabled: boolean }): MicActivity {
   const [available, setAvailable] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const speechAt = useRef(0);
+  const noiseFloor = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -92,13 +98,14 @@ export function useMicActivity({ enabled }: { enabled: boolean }): MicActivity {
       timer = window.setInterval(() => {
         analyser.getFloatTimeDomainData(frame);
         const now = performance.now();
-        const next = advanceGate(gate, rms(frame), now);
-        if (next !== gate) {
-          const was = gate.speaking;
-          gate = next;
-          if (next.speaking !== was) setSpeaking(next.speaking);
-        }
+        const was = gate.speaking;
+        gate = advanceGate(gate, rms(frame), now);
+        // Only the verdict reaches React. The gate itself changes every frame
+        // now that it carries a noise floor, and re-rendering twenty times a
+        // second to say "still quiet" would be worse than useless.
+        if (gate.speaking !== was) setSpeaking(gate.speaking);
         if (gate.speaking) speechAt.current = now;
+        noiseFloor.current = gate.noiseFloor;
       }, TICK_MS);
     };
 
@@ -112,8 +119,9 @@ export function useMicActivity({ enabled }: { enabled: boolean }): MicActivity {
       setAvailable(false);
       setSpeaking(false);
       speechAt.current = 0;
+      noiseFloor.current = 0;
     };
   }, [enabled]);
 
-  return { available, speaking, speechAt };
+  return { available, speaking, speechAt, noiseFloor };
 }
