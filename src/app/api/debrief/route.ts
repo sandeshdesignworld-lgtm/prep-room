@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic, describeError, MODEL } from "@/lib/anthropic";
-import { debriefSystemPrompt } from "@/lib/prompts";
+import { debriefSystemPrompt, deliveryAnalysisSystemPrompt } from "@/lib/prompts";
 import { isModeId } from "@/lib/modes";
 import { clampText, sanitiseTurns } from "@/lib/api";
 import { readScenario } from "@/lib/scenario";
-import { parseJsonLoose } from "@/lib/json";
-import type { Debrief, DebriefRequest } from "@/lib/types";
+import { cleanLine, parseJsonLoose } from "@/lib/json";
+import type { Debrief, DebriefRequest, ModeId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,16 @@ const DebriefSchema = z.object({
   strengths: z.array(z.string()),
   improvements: z.array(z.string()),
   stronger_line: z.array(z.string()),
-  delivery: z.array(z.string()),
 });
+
+const AnalysisSchema = z.object({
+  noticed: z.array(z.string()),
+  cues: z.array(z.string()),
+});
+
+type Analysis = z.infer<typeof AnalysisSchema>;
+
+const NO_ANALYSIS: Analysis = { noticed: [], cues: [] };
 
 export async function POST(request: Request) {
   let body: DebriefRequest;
@@ -38,6 +46,7 @@ export async function POST(request: Request) {
   }
 
   const signalSummary = clampText(body.signalSummary, 4000);
+  const signalDetail = clampText(body.signalDetail, 14000);
 
   const transcript = [
     scenario
@@ -51,33 +60,51 @@ export async function POST(request: Request) {
     // because the API requires the first message to be the user's.
     scenario?.opening ? `THEM: ${scenario.opening}` : "",
     ...messages.map((m) => `${m.role === "assistant" ? "THEM" : "ME"}: ${m.content}`),
-    signalSummary ? `\nDelivery-signal summary:\n${signalSummary}` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
   try {
-    const response = await anthropic().messages.parse({
-      model: MODEL,
-      max_tokens: 2000,
-      system: debriefSystemPrompt({ mode: body.mode, hasSignals: signalSummary.length > 0 }),
-      messages: [{ role: "user", content: transcript }],
-      output_config: { format: zodOutputFormat(DebriefSchema) },
-    });
+    // Two passes, concurrently. They are separate because a single call asked
+    // to score the conversation AND read the timeline does the second one
+    // badly: it skims and hands back the per-turn averages, which the user has
+    // already seen live. Concurrent because the debrief is the end of a
+    // practice run and the user is sitting there waiting for it, so this costs
+    // one call's latency rather than two.
+    const [parsed, analysis] = await Promise.all([
+      writeDebrief({
+        mode: body.mode,
+        transcript,
+        signalSummary,
+      }),
+      signalDetail || signalSummary
+        ? analyseDelivery({
+            mode: body.mode,
+            transcript,
+            detail: signalDetail || signalSummary,
+          })
+        : Promise.resolve(NO_ANALYSIS),
+    ]);
 
-    const parsed = response.parsed_output ?? fallbackParse(response);
     if (!parsed) {
-      return Response.json({ error: "Couldn't put the debrief together. Try again." }, { status: 502 });
+      return Response.json(
+        { error: "Couldn't put the debrief together. Try again." },
+        { status: 502 }
+      );
     }
 
     // Trim to the shape the UI lays out, and drop delivery claims we can't back up.
+    const lines = (items: string[], max: number) =>
+      items.map(cleanLine).filter(Boolean).slice(0, max);
+
     const debrief: Debrief = {
       score: Math.min(10, Math.max(1, Math.round(parsed.score))),
-      verdict: parsed.verdict.trim(),
-      strengths: parsed.strengths.slice(0, 3),
-      improvements: parsed.improvements.slice(0, 3),
-      stronger_line: parsed.stronger_line.slice(0, 4),
-      delivery: signalSummary ? parsed.delivery.slice(0, 4) : [],
+      verdict: cleanLine(parsed.verdict),
+      strengths: lines(parsed.strengths, 3),
+      improvements: lines(parsed.improvements, 3),
+      stronger_line: lines(parsed.stronger_line, 4),
+      noticed: lines(analysis.noticed, 4),
+      cues: lines(analysis.cues, 3),
     };
     return Response.json(debrief, { headers: { "cache-control": "no-store" } });
   } catch (err) {
@@ -87,11 +114,68 @@ export async function POST(request: Request) {
   }
 }
 
-function fallbackParse(response: { content: Array<{ type: string }> }): z.infer<typeof DebriefSchema> | null {
+async function writeDebrief(opts: {
+  mode: ModeId;
+  transcript: string;
+  signalSummary: string;
+}): Promise<z.infer<typeof DebriefSchema> | null> {
+  const content = opts.signalSummary
+    ? `${opts.transcript}\n\nDelivery-signal summary:\n${opts.signalSummary}`
+    : opts.transcript;
+
+  const response = await anthropic().messages.parse({
+    model: MODEL,
+    max_tokens: 2000,
+    system: debriefSystemPrompt({
+      mode: opts.mode,
+      hasSignals: opts.signalSummary.length > 0,
+    }),
+    messages: [{ role: "user", content }],
+    output_config: { format: zodOutputFormat(DebriefSchema) },
+  });
+
+  return response.parsed_output ?? fallbackParse(response, DebriefSchema);
+}
+
+/**
+ * Reads the timeline against the transcript. Failing here must not cost the
+ * user their debrief, which is the thing they actually waited for, so this
+ * swallows its own errors and hands back nothing to say.
+ */
+async function analyseDelivery(opts: {
+  mode: ModeId;
+  transcript: string;
+  detail: string;
+}): Promise<Analysis> {
+  try {
+    const response = await anthropic().messages.parse({
+      model: MODEL,
+      max_tokens: 2000,
+      system: deliveryAnalysisSystemPrompt({ mode: opts.mode }),
+      messages: [
+        {
+          role: "user",
+          content: `${opts.transcript}\n\n${opts.detail}`,
+        },
+      ],
+      output_config: { format: zodOutputFormat(AnalysisSchema) },
+    });
+
+    return response.parsed_output ?? fallbackParse(response, AnalysisSchema) ?? NO_ANALYSIS;
+  } catch (err) {
+    console.error("[/api/debrief] delivery analysis failed", err);
+    return NO_ANALYSIS;
+  }
+}
+
+function fallbackParse<T extends z.ZodType>(
+  response: { content: Array<{ type: string }> },
+  schema: T
+): z.infer<T> | null {
   const text = response.content
     .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("");
-  const result = DebriefSchema.safeParse(parseJsonLoose<unknown>(text));
+  const result = schema.safeParse(parseJsonLoose<unknown>(text));
   return result.success ? result.data : null;
 }

@@ -71,8 +71,19 @@ export interface Debrief {
   strengths: string[];
   improvements: string[];
   stronger_line: string[];
-  /** Empty until Phase 4 supplies delivery signals. */
-  delivery: string[];
+  /**
+   * "What I noticed": patterns read off the signal timeline and tied to
+   * moments in the transcript. Empty when the camera was off. Optional because
+   * sessions saved before the analysis step existed do not have it.
+   */
+  noticed?: string[];
+  /**
+   * Two or three short lines the coach says out loud in the debrief, derived
+   * from `noticed`. Spoken after the exchange, never during it.
+   */
+  cues?: string[];
+  /** Superseded by `noticed`. Kept so debriefs saved before it still render. */
+  delivery?: string[];
 }
 
 export interface Session {
@@ -115,6 +126,11 @@ export interface DebriefRequest {
   mode: ModeId;
   scenario: Scenario;
   messages: Turn[];
-  /** Phase 4: a summary of the delivery-signal timeline. */
+  /** A summary of the delivery-signal timeline; informs the score. */
   signalSummary?: string;
+  /**
+   * The fuller timeline, with the arc inside each turn and a track across the
+   * session. Read by the analysis pass, which is the one looking for patterns.
+   */
+  signalDetail?: string;
 }

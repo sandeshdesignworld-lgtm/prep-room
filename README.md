@@ -58,7 +58,7 @@ npm run lint
 | `src/app/api/advisor/route.ts` | `POST /api/advisor`, multi-turn, streams the reply back as plain text. |
 | `src/app/api/scenario/route.ts` | `POST /api/scenario`, reads the advisor thread and casts the counterpart. Structured output. |
 | `src/app/api/roleplay/route.ts` | `POST /api/roleplay`, the counterpart's next line, in character, streamed. |
-| `src/app/api/debrief/route.ts` | `POST /api/debrief`, scored debrief as JSON. Structured output, with `json.ts` as a fallback parser. |
+| `src/app/api/debrief/route.ts` | `POST /api/debrief`, scored debrief as JSON. Two concurrent passes: the debrief itself, and the delivery analysis that reads the signal timeline against the transcript. Structured output, with `json.ts` as a fallback parser. |
 | `src/components/room/` | The room: the call stage (hero camera, live pills, call controls), the signal cards under it, the coach panel on the right, and `Room.tsx` holding the session that runs through both. |
 | `src/components/practice/` | Debrief card, ambient nudge, signal timeline. |
 | `src/components/app/` | The icon rail, history, progress, and the data/privacy controls. |
@@ -99,6 +99,15 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **What I noticed.** Done. The debrief runs a second pass over the full signal
+  timeline (per-turn arcs, first third against last third, plus a track across
+  the session) alongside the transcript, and returns patterns tied to moments
+  rather than the per-turn averages the user already saw live. It also returns
+  two or three short spoken cue points. The honesty rules in
+  `deliveryAnalysisSystemPrompt` are the feature: every number is named as the
+  proxy it is, no emotion, mood or trait may be inferred, no cause may be
+  guessed at, and a thin session gets fewer observations rather than invented
+  ones. The pass fails soft: if it errors, the debrief still arrives.
 - **Auto-send.** Done. With the mic open, a turn goes on its own after
   `SILENCE_MS` (1500ms, one named constant in `src/lib/voice-activity.ts`) of
   actual quiet, with a draining hairline and a "sending in" line that any sound

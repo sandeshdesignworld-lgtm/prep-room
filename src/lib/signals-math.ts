@@ -417,3 +417,143 @@ function truncate(text: string, max: number): string {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
+
+/* ------------------------- the deep read (analysis) ---------------------- */
+
+/**
+ * Everything measured over one stretch of samples.
+ * Same six numbers as the rollup, so a turn, a third of a turn and the whole
+ * session are all described in the same terms.
+ */
+export interface Means {
+  facing: number;
+  fidget: number;
+  openness: number;
+  smile: number;
+  brow: number;
+  gazeDown: number;
+}
+
+function meansOf(group: Sample[]): Means {
+  return {
+    facing: mean(group.map((g) => g.facing)),
+    fidget: mean(group.map((g) => g.fidget)),
+    openness: mean(group.map((g) => g.openness)),
+    smile: mean(group.map((g) => g.smile)),
+    brow: mean(group.map((g) => g.brow)),
+    gazeDown: mean(group.map((g) => g.gazeDown)),
+  };
+}
+
+/**
+ * One turn, plus how it started and how it ended.
+ *
+ * A per-turn mean hides the thing most worth seeing: someone who opens facing
+ * the camera and has drifted off it by the end of the same answer averages out
+ * as fine. The thirds make that visible. The middle third is dropped on
+ * purpose, it only blurs the two ends together.
+ */
+export interface TurnArc {
+  turn: number;
+  seconds: number;
+  whole: Means;
+  open: Means;
+  close: Means;
+}
+
+/** Turns shorter than this have no meaningful shape; open and close are the same. */
+export const ARC_MIN_SAMPLES = 6;
+
+export function turnArcs(samples: Sample[]): TurnArc[] {
+  const byTurn = new Map<number, Sample[]>();
+  for (const s of samples) {
+    if (s.turn < 0) continue;
+    const list = byTurn.get(s.turn);
+    if (list) list.push(s);
+    else byTurn.set(s.turn, [s]);
+  }
+
+  return [...byTurn.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([turn, group]) => {
+      const whole = meansOf(group);
+      const third = Math.floor(group.length / 3);
+      const short = group.length < ARC_MIN_SAMPLES || third === 0;
+      return {
+        turn,
+        seconds: Math.round((group[group.length - 1].t - group[0].t) / 1000),
+        whole,
+        open: short ? whole : meansOf(group.slice(0, third)),
+        close: short ? whole : meansOf(group.slice(-third)),
+      };
+    });
+}
+
+/** Keeps the track readable, and the prompt bounded, however long the rehearsal ran. */
+export const MAX_TRACK_ROWS = 40;
+const TRACK_MIN_BUCKET_MS = 3000;
+
+/**
+ * The full text handed to the analysis step. Richer than summariseSignals, which
+ * still feeds the debrief itself: this one carries the shape inside each turn
+ * and a coarse track of the whole session, which is what a claim like "it fell
+ * away every time they were pushed" has to be read off.
+ *
+ * It states, at length, what each number actually is and what it cannot see.
+ * That preamble is load-bearing. The numbers are estimates off face and pose
+ * landmarks, and a model handed bare percentages will write about them as
+ * though they were measurements of a person's state.
+ */
+export function detailSignals(samples: Sample[], turnLabels: string[]): string {
+  if (samples.length === 0) return "";
+  const arcs = turnArcs(samples);
+  const overall = meansOf(samples);
+  const seconds = Math.round((samples[samples.length - 1].t - samples[0].t) / 1000);
+
+  const lines = [
+    "Delivery signals, measured in the user's own browser from their camera at about 15Hz. No video was recorded or sent anywhere; these numbers are all that exists.",
+    "",
+    "What each number IS, and what it cannot see. Every one of these is an estimate off face and pose landmarks, not a measurement of the person:",
+    "- facing: the share of frames where the head was pointed within about 18 degrees of the camera horizontally and 14 vertically. This is a PROXY for eye contact. It does not track pupils, so reading from a second screen straight ahead still counts as facing, and a webcam above the screen means looking at the other person's face reads as slightly down.",
+    "- movement: how far the nose travelled between frames, scaled to 0-100%. A PROXY for fidgeting. Leaning in, nodding and talking with the head all raise it.",
+    "- open posture: the width between the shoulders measured against this person's own first two and a half seconds. Turning side-on or hunching lowers it; so does simply sitting further back.",
+    "- smiling, brow down, eyes down: face blendshape scores. PROXIES for the expression, nothing more. They cannot tell a warm smile from a nervous one, or concentration from a frown.",
+    "",
+    `Whole session (${seconds}s of camera across ${arcs.length} ${arcs.length === 1 ? "turn" : "turns"}): facing ${pct(overall.facing)}, movement ${pct(overall.fidget)}, open posture ${pct(overall.openness)}, smiling ${pct(overall.smile)}, brow down ${pct(overall.brow)}, eyes down ${pct(overall.gazeDown)}.`,
+    "",
+    "Per turn. Each pair is the first third of that turn, then the last third, so you can see which way it moved while they were speaking:",
+  ];
+
+  for (const a of arcs) {
+    const label = turnLabels[a.turn];
+    const quoted = label ? ` They said: "${truncate(label, 120)}"` : "";
+    lines.push(
+      `Turn ${a.turn + 1} (${a.seconds}s): facing ${arrow(a.open.facing, a.close.facing)}, movement ${arrow(a.open.fidget, a.close.fidget)}, open posture ${arrow(a.open.openness, a.close.openness)}, smiling ${arrow(a.open.smile, a.close.smile)}, eyes down ${arrow(a.open.gazeDown, a.close.gazeDown)}.${quoted}`
+    );
+  }
+
+  const track = downsample(samples, trackBucket(samples));
+  if (track.length > 1) {
+    lines.push(
+      "",
+      "Track across the whole session, one row per bucket (turn number, then the same signals):"
+    );
+    for (const s of track) {
+      lines.push(
+        `${Math.round(s.t / 1000)}s  turn ${s.turn < 0 ? "-" : s.turn + 1}  facing ${pct(s.facing)}  movement ${pct(s.fidget)}  posture ${pct(s.openness)}  smile ${pct(s.smile)}`
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function trackBucket(samples: Sample[]): number {
+  const span = samples[samples.length - 1].t - samples[0].t;
+  return Math.max(TRACK_MIN_BUCKET_MS, Math.ceil(span / MAX_TRACK_ROWS));
+}
+
+/** "82% → 31%", or just "82%" when the two ends are the same number. */
+function arrow(from: number, to: number): string {
+  return pct(from) === pct(to) ? pct(from) : `${pct(from)} → ${pct(to)}`;
+}

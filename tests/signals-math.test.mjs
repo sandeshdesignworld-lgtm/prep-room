@@ -3,6 +3,7 @@ import {
   shoulderWidth, shoulderTilt, openness, fidget, nudgeLevel,
   downsample, rollupByTurn, summariseSignals,
   readCandidates, newGate, gateStatus, STATUS_HOLD_MS, FIDGET_NOMINAL_MS,
+  turnArcs, detailSignals, MAX_TRACK_ROWS,
 } from "../.test-build/signals-math.js";
 
 let pass=0, fail=0;
@@ -157,6 +158,58 @@ ok("recovering is debounced the same way", back.status==="good");
 const steadyGate = newGate("good");
 ok("an unchanged gate is returned by identity",
   gateStatus(steadyGate, "good", 500) === steadyGate);
+
+console.log("--- turn arcs ---");
+// One turn that starts facing the camera and ends off it, and a second that
+// never moves. Nine samples so each third is three.
+const drift = [];
+for (let i = 0; i < 9; i++) drift.push({
+  t: i * 100, turn: 0, facing: i < 3 ? 1 : i < 6 ? 0.5 : 0,
+  smile: 0, brow: 0, gazeDown: 0, jawOpen: 0, openness: 0.8, tilt: 0, fidget: 0.1,
+});
+for (let i = 0; i < 9; i++) drift.push({
+  t: 900 + i * 100, turn: 1, facing: 1,
+  smile: 0.2, brow: 0, gazeDown: 0, jawOpen: 0, openness: 0.8, tilt: 0, fidget: 0.1,
+});
+const arcs = turnArcs(drift);
+ok("one arc per turn", arcs.length === 2);
+near("opens facing", arcs[0].open.facing, 1);
+near("closes away", arcs[0].close.facing, 0);
+near("the whole turn averages between the two", arcs[0].whole.facing, 5/9);
+near("a flat turn opens and closes the same", arcs[1].open.facing - arcs[1].close.facing, 0);
+ok("samples before the first turn are dropped",
+  turnArcs([{ ...drift[0], turn: -1 }]).length === 0);
+
+// A turn too short to have a shape reports one, not a shape read off two frames.
+const stub = turnArcs([drift[0], { ...drift[1], facing: 0 }]);
+ok("a very short turn has no arc", stub[0].open.facing === stub[0].close.facing);
+
+console.log("--- the deep read ---");
+ok("nothing from no samples", detailSignals([], []) === "");
+const detail = detailSignals(drift, ["I built a parser", "Around eight lakh"]);
+ok("names the proxies, not the conclusions", /PROXY/.test(detail));
+ok("says what it cannot see", /does not track pupils/.test(detail));
+ok("shows the arc inside a turn", detail.includes("100% → 0%"));
+ok("quotes what was being said", detail.includes("I built a parser"));
+ok("too short for a track, so it doesn't fake one",
+  !/Track across the whole session/.test(detail));
+// The preamble names the emotion words in order to forbid them, so the check
+// that matters is on the data itself.
+const dataLines = detail.split("\n").filter((l) => /^Turn \d/.test(l));
+ok("the per-turn lines are numbers and quotes, nothing else",
+  dataLines.length === 2 &&
+  !/nervous|anxious|confident|uncomfortable|defensive|seemed/i.test(dataLines.join(" ")));
+
+// A long session must not turn into a thousand rows of prompt.
+const long = [];
+for (let i = 0; i < 4000; i++) long.push({
+  t: i * 66, turn: Math.floor(i / 500), facing: 1,
+  smile: 0, brow: 0, gazeDown: 0, jawOpen: 0, openness: 0.7, tilt: 0, fidget: 0.2,
+});
+const longDetail = detailSignals(long, []);
+ok("a long enough session carries a track", /Track across the whole session/.test(longDetail));
+const rows = longDetail.split("\n").filter((l) => /^\d+s {2}turn /.test(l));
+ok(`and it stays bounded (${rows.length} rows)`, rows.length <= MAX_TRACK_ROWS + 1);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

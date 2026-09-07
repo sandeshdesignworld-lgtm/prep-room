@@ -53,3 +53,25 @@ function firstObject(text: string): string | null {
   }
   return null;
 }
+
+/**
+ * Turns a literal backslash-u escape back into the character it names.
+ *
+ * Structured output occasionally hands back a string containing the six
+ * characters — rather than an em dash, and it lands on the debrief screen
+ * exactly like that. Nothing a coach writes legitimately contains that
+ * sequence, so decoding it is safe, and a stray — in the middle of "what
+ * to sharpen" reads as the app being broken.
+ */
+export function decodeStrayEscapes(text: string): string {
+  return text.replace(/\\u([0-9a-fA-F]{4})/g, (whole, hex: string) => {
+    const code = parseInt(hex, 16);
+    // Lone surrogates would produce broken text; leave those alone.
+    return code >= 0xd800 && code <= 0xdfff ? whole : String.fromCharCode(code);
+  });
+}
+
+/** Every string the model writes goes through here before the UI sees it. */
+export function cleanLine(text: string): string {
+  return decodeStrayEscapes(text).trim();
+}

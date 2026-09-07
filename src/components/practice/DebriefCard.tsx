@@ -28,6 +28,15 @@ function List({
   );
 }
 
+function SpeakerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-3.5 w-3.5 text-blue" fill="none" strokeWidth={1.8}>
+      <path d="M4 9v6h3.5L12 19V5L7.5 9H4Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function DebriefCard({
   debrief,
   scenario,
@@ -37,6 +46,11 @@ export default function DebriefCard({
   scenario?: Scenario;
   signals?: SignalSample[];
 }) {
+  // `delivery` is what debriefs written before the analysis pass stored. Old
+  // saved sessions still open, they just get the flatter notes they were given.
+  const noticed = debrief.noticed ?? debrief.delivery ?? [];
+  const cues = debrief.cues ?? [];
+
   return (
     <div className="rounded-2xl border bg-card hairline p-5">
       <div className="flex items-start justify-between gap-4">
@@ -75,7 +89,41 @@ export default function DebriefCard({
           </div>
         )}
 
-        <List title="Delivery" items={debrief.delivery} dot="bg-blue" />
+        {noticed.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-2">
+              What I noticed
+            </h4>
+            <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+              Estimated from your camera, on this device. Where your head and shoulders were
+              pointing and how much you moved, not how you felt.
+            </p>
+            <ul className="mt-2 space-y-2">
+              {noticed.map((item, i) => (
+                <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-ink">
+                  <span aria-hidden className="mt-[0.5em] h-1.5 w-1.5 shrink-0 rounded-full bg-blue" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {cues.length > 0 && (
+          <div className="rounded-xl bg-fill-2 px-3.5 py-3">
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink-2">
+              <SpeakerIcon />
+              Cues for next time
+            </h4>
+            <ul className="mt-2 space-y-1.5">
+              {cues.map((cue, i) => (
+                <li key={i} className="text-sm leading-relaxed text-ink">
+                  &ldquo;{cue}&rdquo;
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {signals && signals.length > 1 && (
           <div className="border-t border-line/60 pt-4">

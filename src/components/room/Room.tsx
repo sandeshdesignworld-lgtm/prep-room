@@ -11,7 +11,13 @@ import { getMode } from "@/lib/modes";
 import { useSpeaker } from "@/lib/speech";
 import { useVoiceLoop } from "@/lib/voice-loop";
 import { joinSpoken } from "@/lib/speech-text";
-import { CAPTURE_MESSAGE, downsample, summariseSignals, useSignalCapture } from "@/lib/signals";
+import {
+  CAPTURE_MESSAGE,
+  detailSignals,
+  downsample,
+  summariseSignals,
+  useSignalCapture,
+} from "@/lib/signals";
 import { newMessage, newSession, saveProfile, saveSession, titleFor } from "@/lib/storage";
 import type {
   Debrief,
@@ -329,7 +335,10 @@ export default function Room({
     // video has left the device at any point, and none is about to.
     const raw = endAnalysis();
     const userLines = roleplayTurns.filter((t) => t.role === "user").map((t) => t.content);
+    // Two readings of the same numbers: the rollup that informs the score, and
+    // the fuller timeline the analysis pass reads for patterns. Both are text.
     const signalSummary = summariseSignals(raw, userLines);
+    const signalDetail = detailSignals(raw, userLines);
     const kept = downsample(raw);
     setSignals(kept);
 
@@ -342,6 +351,7 @@ export default function Room({
           scenario,
           messages: roleplayTurns.map(({ role, content }) => ({ role, content })),
           signalSummary,
+          signalDetail,
         }),
       });
       const payload = await res.json();

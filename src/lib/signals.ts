@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  detailSignals,
   faceSignals,
   fidget,
   gateStatus,
@@ -481,5 +482,5 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-export { summariseSignals, downsample };
+export { summariseSignals, detailSignals, downsample };
 export type { LiveRead, Sample };
