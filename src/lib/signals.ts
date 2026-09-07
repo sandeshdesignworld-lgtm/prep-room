@@ -76,6 +76,36 @@ const LEVEL_PUSH_MS = 250;
 /** Heavy smoothing on the nudge: roughly an 8 second time constant. */
 const NUDGE_ALPHA = 1 - Math.exp(-SAMPLE_MS / 8000);
 
+/**
+ * Whether this video can actually be handed to a detector right now.
+ *
+ * Every clause here is a way MediaPipe throws rather than returning nothing,
+ * and a throw used to take the read down for the rest of the rehearsal:
+ *
+ *  - no element, or no stream on it;
+ *  - HAVE_NOTHING / HAVE_METADATA, which happens for a moment whenever the
+ *    stream is re-attached or the element is re-laid-out;
+ *  - a zero intrinsic size, which can outlast readyState reaching 2 and is the
+ *    one that readyState alone does not catch;
+ *  - paused or ended, where there is no current frame to read at all.
+ */
+function videoIsReadable(el: HTMLVideoElement): boolean {
+  return (
+    el.readyState >= 2 &&
+    el.videoWidth > 0 &&
+    el.videoHeight > 0 &&
+    !el.paused &&
+    !el.ended
+  );
+}
+
+/**
+ * How long the loop may go without running a single frame before it is treated
+ * as dead. Comfortably longer than a slow frame, comfortably shorter than a
+ * rehearsal.
+ */
+const LOOP_STALL_MS = 2000;
+
 /** Roughly two seconds of failed frames at the sample rate. */
 const DETECT_FAILURE_ALARM = 30;
 
@@ -206,12 +236,17 @@ export function useSignalCapture() {
   const publishedRef = useRef(false);
   /** Consecutive detection throws, so a permanently dead read announces itself. */
   const detectFailuresRef = useRef(0);
+  /** When the loop last ran a frame at all. The watchdog reads this. */
+  const lastTickRef = useRef(0);
+  const watchdogRef = useRef<number | null>(null);
 
   /** Stops the detection loop. The camera and the loaded models stay put. */
   const haltAnalysis = useCallback(() => {
     analysisRunRef.current += 1;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+    if (watchdogRef.current !== null) window.clearInterval(watchdogRef.current);
+    watchdogRef.current = null;
   }, []);
 
   const teardown = useCallback(() => {
@@ -369,20 +404,44 @@ export function useSignalCapture() {
     );
 
     const tick = () => {
+      // Scheduled first and unconditionally. Whatever happens below, the next
+      // frame is already booked, so no single bad frame can end the loop.
       rafRef.current = requestAnimationFrame(tick);
+
+      lastTickRef.current = performance.now();
+
       const marks = landmarkersRef.current;
       const el = videoRef.current;
-      if (!marks || !el || el.readyState < 2) return;
+      if (!marks || !el) return;
+
+      // The stream can come adrift from the element: a re-layout, a element
+      // React re-created, a track the browser detached. MediaPipe is handed
+      // this element every frame, so if it has lost its source the read is over
+      // until something puts it back. This puts it back.
+      const stream = streamRef.current;
+      if (stream && el.srcObject !== stream) {
+        el.srcObject = stream;
+        void el.play().catch(() => {});
+        return;
+      }
+      if (el.paused && stream) void el.play().catch(() => {});
+
+      // readyState alone is not enough. A video can report HAVE_CURRENT_DATA
+      // while its intrinsic size is still 0, and detectForVideo throws on a
+      // zero-sized frame rather than returning nothing. Skipping is free; the
+      // next frame is 66ms away.
+      if (!videoIsReadable(el)) return;
 
       const now = performance.now();
       if (now - lastSampleRef.current < SAMPLE_MS) return;
       lastSampleRef.current = now;
       const t = now - startedAtRef.current;
 
-      // MediaPipe rejects a timestamp that doesn't advance, and two rAF
-      // callbacks can land on the same millisecond.
-      let stamp = now;
-      if (stamp <= lastStampRef.current) stamp = lastStampRef.current + 1;
+      // MediaPipe rejects a timestamp that does not advance, and two rAF
+      // callbacks can land on the same millisecond. Strictly increasing by
+      // construction: never the previous value, never behind it, even if
+      // performance.now() were to stall or step backwards.
+      const stamp = Math.max(now, lastStampRef.current + 1);
       lastStampRef.current = stamp;
 
       let facing = 0;
@@ -431,13 +490,15 @@ export function useSignalCapture() {
         poseTickRef.current += 1;
         detectFailuresRef.current = 0;
       } catch (err) {
-        // A dropped frame is not worth failing the session over. A dropped
-        // frame every frame is: the read would sit grey for the whole
-        // rehearsal with nothing anywhere saying why.
+        // A dropped frame is not worth failing the session over, and it must
+        // never be worth ending the loop over: the next frame is already
+        // scheduled and will try again. A dropped frame EVERY frame is worth
+        // saying out loud, once, or the read sits grey for the whole rehearsal
+        // with nothing anywhere explaining it.
         detectFailuresRef.current += 1;
         if (detectFailuresRef.current === DETECT_FAILURE_ALARM) {
           console.error(
-            `[Prime AI signals] face and pose detection has failed ${DETECT_FAILURE_ALARM} frames in a row, so the live read is not updating.`,
+            `[Prime AI signals] face and pose detection has failed ${DETECT_FAILURE_ALARM} frames in a row, so the live read is not updating. The loop is still running and will recover on its own if the camera comes back.`,
             err
           );
         }
@@ -500,7 +561,30 @@ export function useSignalCapture() {
       }
     };
 
+    lastTickRef.current = performance.now();
     rafRef.current = requestAnimationFrame(tick);
+
+    /**
+     * Restarts the loop if it ever stops running.
+     *
+     * requestAnimationFrame is not a guarantee. A frame callback that throws
+     * somewhere unguarded, a renderer under enough pressure to drop it, a tab
+     * hidden and restored oddly: any of them leave the read frozen for the rest
+     * of the rehearsal, still showing whatever it last showed, with nothing to
+     * say it has stopped.
+     *
+     * Cancelling before rescheduling means there is never more than one loop:
+     * a callback already queued is discarded rather than joined by a second.
+     */
+    if (watchdogRef.current !== null) window.clearInterval(watchdogRef.current);
+    watchdogRef.current = window.setInterval(() => {
+      if (analysisRunRef.current !== runId) return;
+      if (performance.now() - lastTickRef.current < LOOP_STALL_MS) return;
+      console.warn("[Prime AI signals] the read stopped running, restarting it.");
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      lastTickRef.current = performance.now();
+      rafRef.current = requestAnimationFrame(tick);
+    }, LOOP_STALL_MS);
   }, []);
 
 
