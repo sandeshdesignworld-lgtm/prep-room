@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
 const out = path.join(root, ".test-build");
 
-const PURE = ["speech-text", "json", "signals-math", "progress", "voice-activity"];
+const PURE = ["speech-text", "json", "signals-math", "progress", "voice-activity", "pcm"];
 
 execFileSync(
   "npx",

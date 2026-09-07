@@ -32,6 +32,19 @@ Without it the app falls back to the browser's `speechSynthesis`, which works bu
 sounds robotic on Indian English. Audition the voices at `/voices` and pick one;
 your choice is saved to your profile, or set `SARVAM_SPEAKER` for the default.
 
+For the coach's face, add [Spatius](https://app.spatius.ai) credentials:
+
+```
+SPATIUS_APP_ID=...
+SPATIUS_API_KEY=...
+SPATIUS_AVATAR_ID=...
+```
+
+`SPATIUS_API_KEY` never leaves the server; it only mints short-lived session
+tokens for `GET /api/avatar`. Without these, or if AvatarKit fails to load, the
+coach is a voice and a monogram and every other part of the app is unchanged.
+The avatar is driven by the Sarvam audio, so it needs `SARVAM_API_KEY` too.
+
 Two things the API taught us the hard way, both encoded in `src/lib/voices.ts`:
 `bulbul:v3` rejects v2-only speakers (anushka, abhilash, karun, hitesh) with a
 400, and Sarvam's own error message advertises a `niharika` voice that the API
@@ -71,7 +84,12 @@ npm run lint
 | `src/lib/sarvam.ts` | Server-only Sarvam Bulbul client. Key never reaches the browser. |
 | `src/app/api/speak/route.ts` | `POST /api/speak` streams one sentence of audio; `GET` reports whether voice is configured. |
 | `src/app/voices/page.tsx` | Audition all 41 Bulbul voices and pick one. |
-| `src/lib/speech.ts` | Web Speech API layer, dictation and read-aloud hooks. Feature-detects; the app works fully without either. |
+| `src/lib/speech.ts` | Web Speech API layer, dictation and read-aloud hooks. Feature-detects; the app works fully without either. Routes the coach's audio to the avatar when there is one. |
+| `src/lib/spatius.ts` | Server-only Spatius client: config, and short-lived session tokens. The API key never reaches the browser. |
+| `src/app/api/avatar/route.ts` | `GET /api/avatar` hands the browser the app id, avatar id and a session token, or `available: false`. |
+| `src/lib/avatar.ts` | Loads and drives AvatarKit in Direct Mode. Every failure path lands on voice-only. |
+| `src/lib/pcm.ts` | The coach's mp3 to mono PCM16 for the motion server. The float-to-PCM half is pure and tested. |
+| `src/components/room/Stage.tsx` | Coach centre, self-view as a corner picture that takes half the stage during a rehearsal, call controls over both. |
 | `src/lib/speech-text.ts` | Pure sentence-chunking and speech-sanitising helpers, kept testable. |
 | `src/lib/voice-activity.ts` | Pure auto-send rules: the speech gate, the noise-blip filter, the silence countdown. Fully tested. |
 | `src/lib/mic.ts` | Microphone level only, via an AnalyserNode. No transcription, no recording, nothing leaves the page. |
@@ -99,6 +117,16 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **The coach has a face.** Done. Spatius AvatarKit renders the coach on a
+  canvas in the page, in Direct Mode: the coach's Sarvam audio is decoded to
+  mono PCM16 in the browser, sent to the Spatius motion server, and the avatar
+  plays it lip-synced. The API key stays server-side and only mints short-lived
+  session tokens; the app id and avatar id are public by nature. The coach is on
+  stage from the first message, gives the advice and then plays the counterpart,
+  and speaks the debrief cue points afterwards — never during a rehearsal.
+  Unconfigured, failed, timed out at 30s, crashed mid-render, or with no Bulbul
+  voice to drive it, the room falls back to a monogram that pulses when the
+  coach speaks, and nothing else changes.
 - **What I noticed.** Done. The debrief runs a second pass over the full signal
   timeline (per-turn arcs, first third against last third, plus a track across
   the session) alongside the transcript, and returns patterns tied to moments
@@ -175,10 +203,24 @@ outstanding and none of them are code:
    are 17. The notice currently says not to use the app under 18, which is a
    stopgap, not a solution.
 3. Confirm the cross-border position on sending conversation text to Anthropic's
-   API, which is the only user content that leaves the device.
+   API and, when the avatar is configured, the coach's own speech audio to
+   Sarvam and Spatius. Still no user video, and no user audio: what goes to
+   Spatius is the coach's voice, not the user's.
 
 Remove the banner when those are done, and bump `CONSENT_VERSION` in `storage.ts`
 so existing users are asked again.
+
+Two more, on the avatar specifically, that only a person can settle:
+
+- **Look at the avatar in [Spatius Studio](https://app.spatius.ai) before
+  shipping it.** It has to read as a calm professional. People bring real,
+  vulnerable situations here, and a face that lands as a game NPC would undo
+  more trust than the feature earns.
+- **Check the free-tier limits and what they cost past them** — minutes,
+  concurrent sessions, avatars. The docs do not publish them; the
+  [pricing page](https://www.spatius.ai/pricing/) does. `insufficientBalance`
+  and `concurrentLimitExceeded` are both error codes the SDK can return, and
+  both currently land on the voice-only fallback, silently.
 
 ## Rules that are load-bearing
 

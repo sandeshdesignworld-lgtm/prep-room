@@ -25,6 +25,12 @@ export interface Profile {
   autoSend?: boolean;
   /** Bulbul speaker id. Undefined means the server default. */
   voice?: string;
+  /**
+   * Show the coach as an avatar. Undefined reads as on, same as `autoSend`.
+   * Off, or a failure to load one, is a coach with a voice and no face, which
+   * is a complete session.
+   */
+  avatar?: boolean;
   /** Phase 3/4: gentle ambient nudge during roleplay. Default off, deliberately. */
   ambientNudge: boolean;
   consentedAt: string;

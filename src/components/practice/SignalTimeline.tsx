@@ -96,7 +96,10 @@ export default function SignalTimeline({ samples }: { samples: SignalSample[] })
                 preserveAspectRatio="none"
                 role="img"
                 aria-label={`${row.label} over the session`}
-                className="overflow-visible"
+                // flex-1 min-w-0, not just width="100%": as a flex item the SVG's
+                // percentage width resolves against the whole row and ignores the
+                // label and the figure beside it, so the chart ran off the panel.
+                className="min-w-0 flex-1 overflow-visible"
               >
                 <rect x={0} y={0} width={W} height={H} rx={3} fill="var(--fill)" />
                 <path d={area} fill="var(--blue)" opacity={0.16} />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CallStage from "./CallStage";
+import Stage from "./Stage";
 import CoachPanel from "./CoachPanel";
 import SignalCards from "./SignalCards";
 import MessageBubble from "@/components/advisor/MessageBubble";
@@ -9,6 +9,7 @@ import DebriefCard from "@/components/practice/DebriefCard";
 import { DIFFICULTIES, DIFFICULTY_LABEL, DIFFICULTY_NOTE } from "@/lib/scenario";
 import { getMode } from "@/lib/modes";
 import { useSpeaker } from "@/lib/speech";
+import { useAvatar } from "@/lib/avatar";
 import { useVoiceLoop } from "@/lib/voice-loop";
 import { joinSpoken } from "@/lib/speech-text";
 import {
@@ -71,7 +72,11 @@ export default function Room({
   // Older profiles predate the setting, and voice-first is the point, so the
   // absence of a stored preference means on.
   const [autoSend, setAutoSend] = useState(profile.autoSend ?? true);
+  // Same rule as auto-send: no stored preference means on. A coach with a face
+  // is the default experience; the toggle is for people who'd rather not.
+  const [avatarOn, setAvatarOn] = useState(profile.avatar ?? true);
 
+  const avatarContainerRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef<string>(new Date().toISOString());
   /** One read per rehearsal: a camera toggled off mid-practice doesn't restart it. */
@@ -81,7 +86,15 @@ export default function Room({
   const scenario = session.roleplay?.scenario ?? null;
   const live = stage === "live";
 
-  const speaker = useSpeaker({ enabled: speakOn, speaker: profile.voice });
+  // The coach's face. Its sink is where the voice goes when it's working, so
+  // the mouth and the sound are the same event rather than two that drift.
+  //
+  // Tied to read-aloud because the avatar IS the voice: it is driven by the
+  // coach's own speech audio, so with replies not being read out there is
+  // nothing to drive it and no reason to pull ten megabytes of assets.
+  const avatar = useAvatar({ enabled: avatarOn && speakOn, container: avatarContainerRef });
+
+  const speaker = useSpeaker({ enabled: speakOn, speaker: profile.voice, sink: avatar.sink });
   // Destructured because useSpeaker hands back a fresh object every render, so
   // anything depending on `speaker` itself is rebuilt on every render.
   const {
@@ -90,8 +103,12 @@ export default function Room({
     feed: feedSpeech,
     flush: flushSpeech,
     supported: speakSupported,
-    speaking: coachSpeaking,
+    speaking: speakerSpeaking,
   } = speaker;
+
+  // Whichever half is actually making the sound. Barge-in reads this, and it
+  // has to be true for both or talking over the avatar wouldn't stop it.
+  const coachSpeaking = speakerSpeaking || avatar.speaking;
 
   const capture = useSignalCapture();
   const {
@@ -419,6 +436,12 @@ export default function Room({
     saveProfile({ ...profile, speakReplies: next });
   }
 
+  function toggleAvatar() {
+    const next = !avatarOn;
+    setAvatarOn(next);
+    saveProfile({ ...profile, avatar: next });
+  }
+
   function toggleAutoSend() {
     const next = !autoSend;
     setAutoSend(next);
@@ -457,6 +480,24 @@ export default function Room({
     cancelSpeech();
     setCameraOn(false);
   }
+
+  /* ------------------------------ the debrief beat ------------------------- */
+
+  /** One spoken debrief per rehearsal, whatever re-renders happen after it. */
+  const spokenDebriefRef = useRef<string | null>(null);
+  const cues = session.debrief?.cues;
+
+  useEffect(() => {
+    if (stage !== "done" || !cues?.length) return;
+    if (spokenDebriefRef.current === session.id + session.debrief?.verdict) return;
+    spokenDebriefRef.current = session.id + session.debrief?.verdict;
+    if (!speakOn) return;
+    // After the exchange, never during it. This is the one moment the coach is
+    // allowed to say something about how it went, and it lands the way a friend
+    // would say it rather than as a read-out of the card.
+    resetSpeech();
+    flushSpeech(`Okay. Here's what I noticed. ${cues.join(" ")}`);
+  }, [stage, cues, session.id, session.debrief?.verdict, speakOn, resetSpeech, flushSpeech]);
 
   /* -------------------------------- render -------------------------------- */
 
@@ -628,11 +669,20 @@ export default function Room({
   return (
     <div className="flex min-h-full flex-col md:h-full md:min-h-0 md:flex-row">
       <div className="flex min-w-0 flex-col gap-2.5 p-3 md:min-h-0 md:flex-1 md:p-4">
-        <CallStage
+        <Stage
+          avatarContainerRef={avatarContainerRef}
+          avatarStatus={avatar.status}
+          avatarOn={avatarOn}
+          onToggleAvatar={toggleAvatar}
+          onAvatarFail={() => setAvatarOn(false)}
+          coachSpeaking={coachSpeaking}
+          presence={presence}
           videoRef={videoRef}
-          live={captureStatus === "running"}
+          cameraLive={captureStatus === "running"}
           read={read}
           nudgeLevel={nudgeLevel}
+          cameraMessage={cameraMessage}
+          practising={live}
           cameraOn={cameraOn}
           micOn={micOn}
           onToggleCamera={() => setCameraOn((v) => !v)}
@@ -640,8 +690,6 @@ export default function Room({
           onEnd={endCall}
           endLabel={live ? "End practice" : "End"}
           endDisabled={!live && !cameraOn}
-          presence={presence}
-          message={cameraMessage}
         />
         <SignalCards read={read} restingNote={restingNote} />
       </div>

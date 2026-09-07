@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     // Generated, not ours: the MediaPipe WASM glue is downloaded by
     // scripts/setup-mediapipe.mjs (and gitignored), and .test-build is tsc output.
     "public/mediapipe/**",
+    // Same, from withAvatarkit: the AvatarKit WASM and its Opus workers.
+    "public/_avatarkit/**",
+    "public/assets/**",
     ".test-build/**",
   ]),
 ]);

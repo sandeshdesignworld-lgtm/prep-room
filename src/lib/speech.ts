@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { forSpeaking, lastSentenceBoundary } from "./speech-text";
+import { toPcm16 } from "./pcm";
+import type { AvatarSink } from "./avatar";
 
 /**
  * Web Speech API wrappers. Both halves feature-detect and degrade to typing, * Firefox has no SpeechRecognition at all, and iOS Safari is inconsistent, so
@@ -267,10 +269,17 @@ interface Clip {
 export function useSpeaker({
   enabled,
   speaker,
+  sink,
   lang = DEFAULT_LANG,
 }: {
   enabled: boolean;
   speaker?: string;
+  /**
+   * Where the audio goes when the coach has a face. The avatar plays the clip
+   * itself so the mouth and the sound stay together; without one, or when it
+   * refuses a clip, playback falls back to the audio element below.
+   */
+  sink?: AvatarSink;
   lang?: string;
 }) {
   const supported = useMemo(
@@ -287,10 +296,22 @@ export function useSpeaker({
 
   const enabledRef = useRef(enabled);
   const speakerRef = useRef(speaker);
+  const sinkRef = useRef(sink);
   useEffect(() => {
     enabledRef.current = enabled;
     speakerRef.current = speaker;
-  }, [enabled, speaker]);
+    sinkRef.current = sink;
+  }, [enabled, speaker, sink]);
+
+  /** Set by flush(), so the drain loop knows the reply is complete. */
+  const endPendingRef = useRef(false);
+  /**
+   * Whether any part of THIS reply went to the avatar. Per reply rather than
+   * per drain pass, because a reply is drained in several passes as sentences
+   * arrive, and only the pass that happens to run last would otherwise know to
+   * close the turn.
+   */
+  const avatarRoundRef = useRef(false);
 
   // Voices load asynchronously; touching the list early makes them available later.
   useEffect(() => {
@@ -318,6 +339,9 @@ export function useSpeaker({
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    endPendingRef.current = false;
+    avatarRoundRef.current = false;
+    sinkRef.current?.interrupt();
     setSpeaking(false);
   }, []);
 
@@ -373,12 +397,42 @@ export function useSpeaker({
 
     while (queueRef.current.length > 0 && generation === generationRef.current) {
       const clip = queueRef.current.shift()!;
+
+      // The avatar path doesn't wait for playback to finish. Its whole model is
+      // that audio is pushed as it arrives and the motion server stays ahead;
+      // pacing it to wall-clock here is exactly what its docs warn stalls it.
+      const avatar = sinkRef.current;
+      if (avatar?.ready) {
+        const blob = await clip.blob.catch(() => null);
+        if (generation !== generationRef.current) break;
+        const pcm = blob ? await toPcm16(blob) : null;
+        if (generation !== generationRef.current) break;
+        if (pcm && avatar.send(pcm)) {
+          avatarRoundRef.current = true;
+          continue;
+        }
+        // Wouldn't decode, or the avatar wouldn't take it. Say it anyway.
+        await speakInBrowser(clip.text);
+        continue;
+      }
+
       await playClip(clip);
     }
 
     drainingRef.current = false;
-    if (generation === generationRef.current) setSpeaking(false);
-  }, [playClip]);
+    if (generation !== generationRef.current) return;
+
+    if (avatarRoundRef.current && endPendingRef.current) {
+      endPendingRef.current = false;
+      avatarRoundRef.current = false;
+      sinkRef.current?.finish();
+      // The avatar reports its own playback state, so this flag stops meaning
+      // anything the moment it takes over.
+      setSpeaking(false);
+      return;
+    }
+    setSpeaking(false);
+  }, [playClip, speakInBrowser]);
 
   const enqueue = useCallback(
     async (raw: string) => {
@@ -426,7 +480,21 @@ export function useSpeaker({
       if (!enabledRef.current) return;
       const rest = full.slice(spokenUpToRef.current);
       spokenUpToRef.current = full.length;
-      if (rest.trim()) void enqueue(rest);
+      endPendingRef.current = true;
+      if (rest.trim()) {
+        void enqueue(rest);
+        return;
+      }
+      // The reply ended exactly on a sentence boundary, so there is no trailing
+      // fragment to enqueue. If the queue has already emptied, nothing is left
+      // to notice the round is over except this.
+      if (!drainingRef.current && queueRef.current.length === 0) {
+        endPendingRef.current = false;
+        if (avatarRoundRef.current) {
+          avatarRoundRef.current = false;
+          sinkRef.current?.finish();
+        }
+      }
     },
     [enqueue]
   );
@@ -434,6 +502,8 @@ export function useSpeaker({
   /** Start of a new reply, so forget how far we got in the previous one. */
   const reset = useCallback(() => {
     spokenUpToRef.current = 0;
+    endPendingRef.current = false;
+    avatarRoundRef.current = false;
   }, []);
 
   useEffect(() => cancel, [cancel]);

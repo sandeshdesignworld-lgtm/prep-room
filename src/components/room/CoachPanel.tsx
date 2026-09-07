@@ -8,9 +8,13 @@ import type { VoiceLoop } from "@/lib/voice-loop";
 import type { Message, ModeId } from "@/lib/types";
 
 /**
- * The conversation, on the right. It carries the whole session: the advice
- * thread and, once a rehearsal starts, the roleplay turns underneath it, so
- * there is one continuous record of what was said rather than two.
+ * The transcript, on the right. It carries the whole session: the advice thread
+ * and, once a rehearsal starts, the roleplay turns underneath it, so there is
+ * one continuous record of what was said rather than two.
+ *
+ * It used to introduce the coach as well, with a monogram and a name. The coach
+ * is on the stage now, so this is what was said and where the user says the next
+ * thing, and nothing else.
  *
  * The mode selector lives at the top of this panel rather than on its own
  * screen. Switching mode is a small decision about tone, not a destination.
@@ -21,6 +25,15 @@ const ACCENT_CHIP: Record<string, string> = {
   blue: "border-blue bg-blue/12 text-ink",
   amber: "border-amber bg-amber/18 text-ink",
 };
+
+function TranscriptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" strokeWidth={1.8}>
+      <rect x="4" y="3.5" width="16" height="17" rx="3" stroke="currentColor" />
+      <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function SpeakerIcon({ on }: { on: boolean }) {
   return (
@@ -88,19 +101,19 @@ export default function CoachPanel({
 
   return (
     <section
-      aria-label="Coach"
+      aria-label="Transcript"
       className="flex min-h-[55vh] min-w-0 flex-col border-t border-line bg-card md:h-full md:min-h-0 md:w-[380px] md:shrink-0 md:border-t-0 md:border-l lg:w-[420px]"
     >
       <header className="shrink-0 border-b px-4 py-3 hairline">
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-coral/12 text-sm font-semibold text-coral"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fill text-ink-2"
           >
-            PR
+            <TranscriptIcon />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-ink">Your coach</p>
+            <p className="truncate text-sm font-semibold text-ink">Transcript</p>
             <p className="truncate text-xs text-ink-2">{MODES[mode].tagline}</p>
           </div>
           {speakSupported && (

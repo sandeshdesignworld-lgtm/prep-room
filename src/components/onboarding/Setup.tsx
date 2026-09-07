@@ -37,6 +37,8 @@ export default function Setup({ onDone }: { onDone: (profile: Profile) => void }
       speakReplies: inputPreference === "voice" && support.speaking,
       // On by default: the whole point of talking is not reaching for a button.
       autoSend: true,
+      // On by default too, and it costs nothing when it isn't configured.
+      avatar: true,
       // Phase 3/4. Off by default, on purpose: the point is to compare.
       ambientNudge: false,
       consentedAt: now,
