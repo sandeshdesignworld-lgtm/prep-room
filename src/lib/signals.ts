@@ -76,6 +76,9 @@ const LEVEL_PUSH_MS = 250;
 /** Heavy smoothing on the nudge: roughly an 8 second time constant. */
 const NUDGE_ALPHA = 1 - Math.exp(-SAMPLE_MS / 8000);
 
+/** Roughly two seconds of failed frames at the sample rate. */
+const DETECT_FAILURE_ALARM = 30;
+
 const NOSE = 0;
 const LEFT_SHOULDER = 11;
 const RIGHT_SHOULDER = 12;
@@ -157,6 +160,14 @@ export function useSignalCapture() {
   const [level, setLevel] = useState(0);
   /** null until the warmup is over: no pills rather than pills built on nothing. */
   const [read, setRead] = useState<LiveRead | null>(null);
+  /**
+   * True when startAnalysis() gave up rather than started. State, not a ref:
+   * the room reads it to clear its own retry latch, and a ref would not tell
+   * it anything had changed.
+   */
+  const [failed, setFailed] = useState(false);
+  /** Guards against a second preload racing the first. */
+  const preloadingRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -193,6 +204,8 @@ export function useSignalCapture() {
   /** Has the first read reached React yet? A ref, so the loop never closes over
    *  a stale `read` and re-publishes an identical object at 15Hz. */
   const publishedRef = useRef(false);
+  /** Consecutive detection throws, so a permanently dead read announces itself. */
+  const detectFailuresRef = useRef(0);
 
   /** Stops the detection loop. The camera and the loaded models stay put. */
   const haltAnalysis = useCallback(() => {
@@ -271,8 +284,40 @@ export function useSignalCapture() {
 
   /* ----------------------------- the analysis ----------------------------- */
 
+  /**
+   * Fetches and instantiates the models without starting to read.
+   *
+   * The read used to begin at the same moment the rehearsal did, which meant
+   * the first several seconds of it were spent downloading nine megabytes of
+   * face and pose models. The pills sat grey through the opening line and the
+   * user's first answer, which is exactly the part of a rehearsal they most
+   * want a read on, and grey for eight seconds is indistinguishable from
+   * broken.
+   *
+   * So this runs while the practice card is on screen, during the seconds
+   * someone spends choosing a difficulty and reading what is about to happen.
+   * By the time they press Start the models are cached and only the warmup is
+   * left. Safe to call repeatedly; it does nothing once they are loaded.
+   *
+   * Loading is not reading. Nothing is sampled here and the camera is not
+   * touched: this only puts the models in memory.
+   */
+  const preloadModels = useCallback(async () => {
+    if (landmarkersRef.current || preloadingRef.current) return;
+    preloadingRef.current = true;
+    try {
+      landmarkersRef.current = await createLandmarkers();
+    } catch (err) {
+      console.error("[Prime AI signals] the face and pose models failed to load.", err);
+    } finally {
+      preloadingRef.current = false;
+    }
+  }, []);
+
+
   const startAnalysis = useCallback(async () => {
     const runId = ++analysisRunRef.current;
+    setFailed(false);
 
     samplesRef.current = [];
     baselineRef.current = [];
@@ -287,6 +332,7 @@ export function useSignalCapture() {
     smileWindowRef.current = [];
     gatesRef.current = freshGates();
     publishedRef.current = false;
+    detectFailuresRef.current = 0;
     setRead(null);
     setLevel(0);
 
@@ -297,7 +343,11 @@ export function useSignalCapture() {
       try {
         marks = await createLandmarkers();
       } catch (err) {
-        console.error("[signals] models failed to load", err);
+        console.error(
+          "[Prime AI signals] the face and pose models failed to load, so there is no live read this time.",
+          err
+        );
+        setFailed(true);
         setAnalysis("off");
         return;
       }
@@ -314,6 +364,9 @@ export function useSignalCapture() {
     lastStampRef.current = 0;
     lastLevelPushRef.current = 0;
     setAnalysis("on");
+    console.info(
+      "[Prime AI signals] reading body language from the camera, on this device. Nothing is uploaded."
+    );
 
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
@@ -376,8 +429,18 @@ export function useSignalCapture() {
           push(fidgetWindowRef.current, movement, POSE_WINDOW);
         }
         poseTickRef.current += 1;
-      } catch {
-        // A dropped frame is not worth failing the session over.
+        detectFailuresRef.current = 0;
+      } catch (err) {
+        // A dropped frame is not worth failing the session over. A dropped
+        // frame every frame is: the read would sit grey for the whole
+        // rehearsal with nothing anywhere saying why.
+        detectFailuresRef.current += 1;
+        if (detectFailuresRef.current === DETECT_FAILURE_ALARM) {
+          console.error(
+            `[Prime AI signals] face and pose detection has failed ${DETECT_FAILURE_ALARM} frames in a row, so the live read is not updating.`,
+            err
+          );
+        }
         return;
       }
 
@@ -440,6 +503,7 @@ export function useSignalCapture() {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
+
   /** Ends the read and hands back the timeline. The camera keeps running. */
   const endAnalysis = useCallback(() => {
     haltAnalysis();
@@ -461,11 +525,14 @@ export function useSignalCapture() {
   return {
     status,
     analysis,
+    /** The last attempt to start reading failed. Worth trying again. */
+    failed,
     level,
     read,
     videoRef,
     startCamera,
     stopCamera,
+    preloadModels,
     startAnalysis,
     endAnalysis,
     markTurn,

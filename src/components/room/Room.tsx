@@ -139,11 +139,13 @@ export default function Room({
   const {
     status: captureStatus,
     analysis,
+    failed: captureFailed,
     read,
     level,
     videoRef,
     startCamera,
     stopCamera,
+    preloadModels,
     startAnalysis,
     endAnalysis,
     markTurn,
@@ -160,12 +162,27 @@ export default function Room({
 
   // Body language is only read during a rehearsal. Outside one the models
   // aren't even loaded: watching someone type a question measures nothing.
+  //
+  // Loading them, though, starts as soon as a rehearsal is being set up. Those
+  // are the seconds someone spends picking a difficulty and reading the card,
+  // and spending them on a download means the pills are ready when the
+  // rehearsal is, rather than grey through the opening line.
+  useEffect(() => {
+    if (stage === "setup" && cameraOn) void preloadModels();
+  }, [stage, cameraOn, preloadModels]);
+
   useEffect(() => {
     if (live && captureStatus === "running" && analysis === "off" && !analysedRef.current) {
       analysedRef.current = true;
       void startAnalysis();
     }
   }, [live, captureStatus, analysis, startAnalysis]);
+
+  // A failed load must not kill the read for the rest of the session: clear the
+  // latch so the next rehearsal tries again rather than sitting grey forever.
+  useEffect(() => {
+    if (captureFailed) analysedRef.current = false;
+  }, [captureFailed]);
 
   const nudgeLevel = profile.ambientNudge && analysis === "on" ? level : null;
 
@@ -772,7 +789,15 @@ export default function Room({
       {/* One block, centred: the stage and the read underneath it share a width
           and sit together, rather than a tile adrift in a wide column with the
           cards stretched across the bottom of it. */}
-      <div className="mx-auto flex w-full min-w-0 max-w-[34rem] flex-col justify-center gap-2.5 p-3 md:min-h-0 md:flex-1 md:p-4">
+      <div
+        className={[
+          "mx-auto flex w-full min-w-0 flex-col justify-center gap-2.5 p-3 md:min-h-0 md:flex-1 md:p-4",
+          // Capped around a single tile normally. A rehearsal puts two side by
+          // side, and the same cap would squeeze the user's own camera, which
+          // is the one thing they are meant to be able to see then.
+          live ? "max-w-[56rem]" : "max-w-[34rem]",
+        ].join(" ")}
+      >
         <Stage
           avatarContainerRef={avatarContainerRef}
           avatarStatus={avatar.status}
