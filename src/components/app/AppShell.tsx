@@ -149,7 +149,7 @@ export default function AppShell({
         <span
           aria-hidden
           className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-coral text-sm font-semibold text-on-accent"
-          title="PrepRoom"
+          title="Prime AI"
         >
           P
         </span>

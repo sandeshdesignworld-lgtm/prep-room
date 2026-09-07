@@ -7,6 +7,12 @@ import type { Message, ModeId, Profile, Session } from "./types";
  * matches what the trust screen promises. Phase 5 swaps the bodies of these
  * functions for API calls, the call sites shouldn't need to change.
  */
+/**
+ * These two keep the old spelling on purpose. They are where every existing
+ * user's profile and sessions actually live, and renaming them would read as
+ * an empty browser: onboarding again, history gone. The product's name is
+ * copy; a storage key is data.
+ */
 const PROFILE_KEY = "preproom.profile.v1";
 const SESSIONS_KEY = "preproom.sessions.v1";
 
@@ -126,7 +132,7 @@ export function exportEverything(): string {
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
-      note: "This is everything PrepRoom has stored about you. It lives in your browser, not on a server.",
+      note: "This is everything Prime AI has stored about you. It lives in your browser, not on a server.",
       profile: loadProfile(),
       sessions: loadSessions(),
     },

@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy | PrepRoom",
-  description: "What PrepRoom stores, what it never stores, and what you can do about it.",
+  title: "Privacy | Prime AI",
+  description: "What Prime AI stores, what it never stores, and what you can do about it.",
 };
 
 const UPDATED = "2 September 2026";
@@ -20,7 +20,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function PrivacyPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
       <h1 className="mt-3 text-2xl font-semibold text-ink">Privacy</h1>
       <p className="mt-2 text-sm text-ink-2">Last updated {UPDATED}.</p>
 
@@ -29,14 +29,14 @@ export default function PrivacyPage() {
           <strong className="font-semibold">Pre-launch draft.</strong> This is written to be
           accurate about what the app currently does, but it has not been reviewed by a lawyer and
           the operator details below are unfilled. It is not yet a compliant notice under India&apos;s
-          Digital Personal Data Protection Act, and must be completed and reviewed before PrepRoom
+          Digital Personal Data Protection Act, and must be completed and reviewed before Prime AI
           is offered to real users.
         </p>
       </div>
 
       <Section title="The short version">
         <p>
-          PrepRoom stores your conversations in your own browser. Your camera and your voice never
+          Prime AI stores your conversations in your own browser. Your camera and your voice never
           leave your device. The one thing that does leave is the text of your conversation with the
           coach, which has to be sent to an AI provider to get a reply. You can download everything
           we hold, or delete it, at any time, from the &ldquo;Your data&rdquo; screen.
@@ -122,16 +122,16 @@ export default function PrivacyPage() {
 
       <Section title="Age">
         <p>
-          PrepRoom is built for college students and early-career adults. Indian data protection law
+          Prime AI is built for college students and early-career adults. Indian data protection law
           gives people under 18 additional protections, including a requirement for verifiable
-          parental consent. PrepRoom does not currently verify age or obtain parental consent, so it
+          parental consent. Prime AI does not currently verify age or obtain parental consent, so it
           should not be used by anyone under 18 until that is built.
         </p>
       </Section>
 
       <Section title="This is not therapy">
         <p>
-          PrepRoom is a practice aid for communication. It is not therapy, counselling, medical
+          Prime AI is a practice aid for communication. It is not therapy, counselling, medical
           advice, or a diagnosis, and the delivery signals are physical measurements rather than any
           assessment of your mental state. If something heavier is going on, please talk to someone
           you trust or a qualified professional.
@@ -149,7 +149,7 @@ export default function PrivacyPage() {
 
       <p className="mt-10 text-sm">
         <Link href="/" className="text-blue-strong underline underline-offset-2">
-          Back to PrepRoom
+          Back to Prime AI
         </Link>
       </p>
     </main>

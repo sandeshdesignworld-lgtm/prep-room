@@ -71,7 +71,7 @@ export default function Home({
   return (
     <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-5 py-10 sm:py-14">
       <div className="fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
 
         <h1 className="mt-3 font-serif text-[2rem] leading-[1.15] font-semibold text-ink sm:text-[2.5rem]">
           What are we working on today?
@@ -139,7 +139,7 @@ export default function Home({
 
         <p className="mt-8 text-xs leading-relaxed text-ink-3">
           Your camera only switches on once you pick one, and it&apos;s read entirely on this
-          device. No video is ever recorded or uploaded. PrepRoom is a practice aid for
+          device. No video is ever recorded or uploaded. Prime AI is a practice aid for
           communication, not therapy or a diagnosis.
         </p>
       </div>

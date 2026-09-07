@@ -25,7 +25,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-5 py-12">
       <div className="fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">PrepRoom</p>
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
         <h1 className="mt-3 text-3xl leading-tight font-semibold text-ink">
           A place to practise the conversation before you have it.
         </h1>
@@ -59,7 +59,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
         </p>
 
         <p className="mt-4 text-xs leading-relaxed text-ink-2">
-          PrepRoom is a practice aid for communication, it isn&apos;t therapy, counselling, or a
+          Prime AI is a practice aid for communication, it isn&apos;t therapy, counselling, or a
           diagnosis, and it won&apos;t tell you what&apos;s wrong with you. If something heavier is
           going on, please talk to someone you trust or a professional.
         </p>

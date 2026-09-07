@@ -1,4 +1,4 @@
-# PrepRoom
+# Prime AI
 
 A communication coach you talk to. Bring a real situation, get specific advice,
 then rehearse it out loud.

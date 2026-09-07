@@ -36,7 +36,7 @@ function SendingIn({ remainingMs, onCancel }: { remainingMs: number; onCancel: (
         />
       </span>
       <span className="mt-1 block text-xs text-ink-2" role="status">
-        Sending in {(remainingMs / 1000).toFixed(1)}s — keep talking to hold it
+        Sending in {(remainingMs / 1000).toFixed(1)}s. Keep talking to hold it.
       </span>
     </button>
   );

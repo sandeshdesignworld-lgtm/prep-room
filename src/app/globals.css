@@ -11,7 +11,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Crisp White: the single source of truth for PrepRoom's colour.
+ * Crisp White: the single source of truth for Prime AI's colour.
  * Nothing else in the app should contain a hex value. Add a token here,
  * then use it as a Tailwind utility (bg-page, text-ink, border-line, ...).
  *

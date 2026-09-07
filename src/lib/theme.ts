@@ -6,7 +6,7 @@ import { useCallback, useSyncExternalStore } from "react";
  * Light or dark, and light wins by default.
  *
  * Crisp White is the product. Someone whose laptop is set to dark should still
- * open PrepRoom and get the app as it was designed, so the system preference is
+ * open Prime AI and get the app as it was designed, so the system preference is
  * deliberately not consulted anywhere: not here, and not in globals.css. Dark
  * exists, but only because someone asked for it.
  *
@@ -17,6 +17,7 @@ import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 
+/** Old spelling kept deliberately: renaming a storage key discards what's in it. */
 export const THEME_KEY = "preproom.theme.v1";
 export const DEFAULT_THEME: Theme = "light";
 

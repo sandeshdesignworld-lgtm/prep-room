@@ -23,7 +23,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "PrepRoom: practise the conversation before you have it",
+  title: "Prime AI: practise the conversation before you have it",
   description:
     "A communication coach you talk to. Bring a real situation, get specific advice, then rehearse it out loud.",
 };

@@ -30,7 +30,7 @@ function Monogram({ speaking }: { speaking: boolean }) {
         aria-hidden
         className="relative flex h-24 w-24 items-center justify-center rounded-full bg-coral/12 text-2xl font-semibold tracking-tight text-coral"
       >
-        PR
+        P
       </span>
     </span>
   );

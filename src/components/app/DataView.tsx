@@ -44,7 +44,7 @@ export default function DataView({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `preproom-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `prime-ai-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -56,7 +56,7 @@ export default function DataView({
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="text-xl font-semibold text-ink">Your data</h1>
       <p className="mt-1 text-sm leading-relaxed text-ink-2">
-        Everything PrepRoom knows about you is stored in this browser, on this device. Clearing your
+        Everything Prime AI knows about you is stored in this browser, on this device. Clearing your
         browser data removes it, and so does the button at the bottom of this page.
       </p>
 
@@ -100,7 +100,7 @@ export default function DataView({
       <section className="mt-4 rounded-2xl border bg-card hairline p-5">
         <h2 className="text-sm font-semibold text-ink">Appearance</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-2">
-          PrepRoom is light by default and stays that way whatever your device is set to. Dark
+          Prime AI is light by default and stays that way whatever your device is set to. Dark
           is here if you want it, and it&apos;s remembered on this device only.
         </p>
         <div className="mt-3 grid max-w-xs grid-cols-2 gap-2">

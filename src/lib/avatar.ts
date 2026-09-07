@@ -135,7 +135,7 @@ function logFailure(failure: AvatarFailure): void {
   // Read-aloud being off is a setting, not a fault, so it doesn't shout.
   const log = failure.code === "muted" ? console.info : console.error;
   log(
-    `[PrepRoom avatar] falling back to voice-only (${failure.code}).\n  ${failure.detail}\n  The session is unaffected: the coach still talks, and everything else works.`
+    `[Prime AI avatar] falling back to voice-only (${failure.code}).\n  ${failure.detail}\n  The session is unaffected: the coach still talks, and everything else works.`
   );
 }
 
@@ -305,7 +305,7 @@ export function useAvatar({
       try {
         avatar = await kit.AvatarManager.shared.load(config.avatarId, (progress) => {
           if (progress.type === "failed") {
-            console.error("[PrepRoom avatar] asset download failed", progress.error);
+            console.error("[Prime AI avatar] asset download failed", progress.error);
           }
         });
       } catch (err) {
@@ -357,7 +357,7 @@ export function useAvatar({
       setFailure(null);
       setLoaded("ready");
       console.info(
-        `[PrepRoom avatar] ready. avatar ${config.avatarId} in ${config.region ?? "us-west"}, driving audio at ${AVATAR_SAMPLE_RATE}Hz.`
+        `[Prime AI avatar] ready. avatar ${config.avatarId} in ${config.region ?? "us-west"}, driving audio at ${AVATAR_SAMPLE_RATE}Hz.`
       );
     };
 
