@@ -1,0 +1,175 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+/*
+ * Dark mode is class-driven and OPT-IN. Crisp White is the app, and it is what
+ * every mockup and every screenshot is; a user whose laptop happens to be set
+ * to dark should still get it. So there is no prefers-color-scheme rule
+ * anywhere below: the ONLY thing that turns this dark is the `dark` class on
+ * <html>, put there by the user's own choice (see src/lib/theme.ts, applied
+ * before first paint by the script in layout.tsx).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Crisp White: the single source of truth for Prime AI's colour.
+ * Nothing else in the app should contain a hex value. Add a token here,
+ * then use it as a Tailwind utility (bg-page, text-ink, border-line, ...).
+ *
+ * Brand-fixed and exact: page, card, line, the three inks, coral (+hover),
+ * blue, amber, red, and the two bubble fills. Everything else is derived,
+ * and each derived token says what it's derived for.
+ */
+:root {
+  --page: #f7f8fa;
+  --card: #ffffff;
+  --line: #e6e8ec;
+  /* Derived: two neutral fills for hovers and resting surfaces. */
+  --fill: #f1f3f5;
+  --fill-2: #f7f8fa;
+
+  --ink: #1e2430;
+  --ink-2: #667085;
+  --ink-3: #98a2b3;
+  --on-accent: #ffffff;
+
+  --coral: #f26a4b;
+  --coral-hover: #e15a3c;
+
+  --blue: #3b82f6;
+  /*
+   * Derived. Brand blue is 3.8:1 on white: right for a dot, a tick or a fill,
+   * short of AA for body text. This is the same hue at 5.1:1 for links and
+   * labels.
+   */
+  --blue-strong: #2563eb;
+  --on-blue-strong: #ffffff;
+
+  --amber: #f59e0b;
+  /* Derived: amber is a light fill, so anything sitting on it needs dark ink. */
+  --on-amber: #3a2a05;
+
+  --red: #ef4444;
+
+  --bubble-coach: #f1f3f5;
+  --bubble-coach-ink: #1e2430;
+  --bubble-user: #fdeae4;
+  --bubble-user-ink: #1e2430;
+
+  --font-inter: 'Inter', sans-serif;
+  --font-fraunces: 'Fraunces', serif;
+}
+
+/*
+ * Neutral dark: clean grays, never murky, with the same coral and blue lifted
+ * for a dark ground. Reached only by the toggle, never by the system setting.
+ */
+:root.dark {
+  --page: #14161a;
+  --card: #1c1f26;
+  --line: #2c313a;
+  --fill: #23272f;
+  --fill-2: #1c1f26;
+
+  --ink: #f2f4f7;
+  --ink-2: #98a2b3;
+  --ink-3: #6b7280;
+
+  --coral: #f57a5d;
+  --coral-hover: #ff8b6e;
+
+  --blue: #60a5fa;
+  --blue-strong: #93c5fd;
+  --on-blue-strong: #14161a;
+
+  --amber: #fbbf24;
+  --on-amber: #241a02;
+
+  --red: #f87171;
+
+  --bubble-coach: #23272f;
+  --bubble-coach-ink: #f2f4f7;
+  --bubble-user: #3a2620;
+  --bubble-user-ink: #fbe6df;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-on-accent: var(--on-accent);
+
+  --color-coral: var(--coral);
+  --color-coral-hover: var(--coral-hover);
+  --color-blue: var(--blue);
+  --color-blue-strong: var(--blue-strong);
+  --color-on-blue-strong: var(--on-blue-strong);
+  --color-amber: var(--amber);
+  --color-on-amber: var(--on-amber);
+  --color-red: var(--red);
+
+  --color-bubble-user: var(--bubble-user);
+  --color-bubble-user-ink: var(--bubble-user-ink);
+  --color-bubble-coach: var(--bubble-coach);
+  --color-bubble-coach-ink: var(--bubble-coach-ink);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Home-screen headline only. See the note in layout.tsx. */
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+@layer base {
+  /*
+   * Light unless the class says otherwise. `light dark` here would let the OS
+   * paint form controls, scrollbars and the canvas dark underneath a light
+   * page, which is most of what made this look dark in the first place.
+   */
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    background-color: var(--page);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Hairline dividers; 0.5px where the browser supports it. */
+  .hairline {
+    border-width: 1px;
+    border-color: var(--line);
+  }
+  @supports (border-width: 0.5px) {
+    .hairline {
+      border-width: 0.5px;
+    }
+  }
+  *:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .fade-up {
+    animation: fade-up 240ms ease-out both;
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

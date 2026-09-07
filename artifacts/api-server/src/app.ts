@@ -31,4 +31,20 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+app.use(
+  (
+    err: unknown,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (err instanceof SyntaxError && "body" in err) {
+      req.log.warn({ err }, "Malformed JSON request");
+      res.status(400).json({ error: "Malformed request." });
+      return;
+    }
+    next(err);
+  },
+);
+
 export default app;

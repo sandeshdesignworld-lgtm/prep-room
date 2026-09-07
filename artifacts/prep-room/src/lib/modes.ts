@@ -1,0 +1,114 @@
+import type { ModeId } from "./types";
+
+/**
+ * Everything mode-specific lives here. The engine reads it and never branches
+ * on the mode itself. Later phases (roleplay, debrief, scenario packs) add fields
+ * to this shape rather than adding `if (mode === ...)` to the routes.
+ */
+export interface ModeConfig {
+  id: ModeId;
+  label: string;
+  tagline: string;
+  blurb: string;
+  /** Fills the {audience} slot in the system prompts. */
+  audience: string;
+  /** Appended to the advisor system prompt; shapes tone and the form of the advice. */
+  advisorTone: string;
+  /** Phase 3: fills {counterpart} in the roleplay prompt. */
+  counterpart: string;
+  /** Phase 3: shapes the debrief. */
+  debriefTone: string;
+  /** The advisor's first line in a fresh thread. Not model-generated; it's fixed. */
+  opener: string;
+  composerPlaceholder: string;
+  /** Tappable starters so a blank thread isn't intimidating. */
+  starters: string[];
+  /** Shown under the thread where it matters (social confidence). */
+  disclaimer?: string;
+  accent: "coral" | "blue" | "amber";
+}
+
+const AUDIENCE = "Indian college students and freshers preparing for campus placements and early-career situations";
+
+export const MODES: Record<ModeId, ModeConfig> = {
+  general: {
+    id: "general",
+    label: "Talk it through",
+    tagline: "A real situation, a real plan",
+    blurb:
+      "Bring any conversation you're dreading (a professor, a manager, a teammate, a family decision) and leave with the actual words to say.",
+    audience: AUDIENCE,
+    advisorTone:
+      "Tone for this mode: warm and direct. When you commit to advice, give a short prioritised list: the two or three things to do next, in order, and how to do each. Plain language, no jargon, no numbered frameworks with names.",
+    counterpart: "the other person in the situation the user described",
+    debriefTone:
+      "Frame the debrief as prioritised, plain recommendations: what to keep doing, and the one thing to change next time.",
+    opener:
+      "What's the situation? Tell me what's actually happening: who's involved and what you're hoping comes out of it.",
+    composerPlaceholder: "Tell me what's going on…",
+    starters: [
+      "I need to ask my manager for a raise",
+      "A teammate keeps missing deadlines and I have to say something",
+      "I have to tell my parents I'm changing my career plan",
+    ],
+    accent: "coral",
+  },
+
+  interview: {
+    id: "interview",
+    label: "Interview prep",
+    tagline: "Placements, without the panic",
+    blurb:
+      "Work through the questions you're worried about, sharpen your answers, then run a mock interview out loud when you're ready.",
+    audience: AUDIENCE,
+    advisorTone:
+      "Tone for this mode: a sharp placement coach who has sat on the other side of the table. When you give advice, be concrete about structure and about the actual sentences. Show a stronger version of what they said, not a description of one. Calibrate everything for a fresher with little or no work experience, never for a senior hire: their projects, internships, and coursework are legitimate material.",
+    counterpart: "the interviewer for a campus placement",
+    debriefTone:
+      "Give a score out of 10 calibrated for a fresher, the specifics behind it, and a sketch of a stronger answer.",
+    opener:
+      "What are you preparing for? Tell me the role or company, and the question or moment you're most worried about.",
+    composerPlaceholder: "The role, the company, what you're worried about…",
+    starters: [
+      "I have a TCS interview next week and I freeze on 'tell me about yourself'",
+      "How do I answer 'why should we hire you' without sounding fake?",
+      "I have no internships. How do I talk about my projects?",
+    ],
+    accent: "blue",
+  },
+
+  social: {
+    id: "social",
+    label: "Social confidence",
+    tagline: "Everyday conversations, low pressure",
+    blurb:
+      "Practise the ordinary things (starting a conversation, joining a group, making a call) somewhere nothing is at stake.",
+    audience: AUDIENCE,
+    advisorTone:
+      "Tone for this mode: gentle, concrete, and literal. Give the user actual openers and exit lines they can memorise, and describe what to do with their body and eyes in plain physical terms. Low shame throughout, never imply the situation should be easy. Never diagnose, never label the user's emotions or personality, never use clinical language, and never comment on anxiety as a condition. This is a practice aid, not therapy or diagnosis; if the user raises something that needs real support, say plainly that this app isn't that and encourage them to talk to someone they trust or a professional.",
+    counterpart: "the other person in the everyday situation the user described",
+    debriefTone:
+      "Keep it encouraging and specific. Name what they actually did that worked before anything else, and give one small, concrete thing to try next time. Score generously and calibrate against the difficulty of the thing for THIS person, not against a confident extrovert, showing up to practise a conversation you find hard is most of the work, and a harsh number here just confirms what they already fear. Reserve anything below 5 for a genuine refusal to engage. The verdict must describe the attempt warmly and never judge the person.",
+    opener:
+      "What's the situation you'd like to feel easier? It can be small. That's usually where we start.",
+    composerPlaceholder: "Describe the situation…",
+    starters: [
+      "I don't know how to join a conversation that's already happening",
+      "I go quiet in group projects even when I have ideas",
+      "I get nervous ordering food or making phone calls",
+    ],
+    disclaimer:
+      "This is a practice aid, not therapy or diagnosis. If something heavier is going on, please talk to someone you trust or a professional.",
+    accent: "amber",
+  },
+};
+
+export const MODE_ORDER: ModeId[] = ["general", "interview", "social"];
+
+export function getMode(id: ModeId): ModeConfig {
+  return MODES[id] ?? MODES.general;
+}
+
+export function isModeId(value: unknown): value is ModeId {
+  return typeof value === "string" && value in MODES;
+}

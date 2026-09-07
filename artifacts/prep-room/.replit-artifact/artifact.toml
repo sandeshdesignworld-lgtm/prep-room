@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Prep Room"
+description = "An AI communication coaching app with guided practice, roleplay, voice feedback, progress history, and an interactive avatar for people preparing for important conversations."
+version = "1.0.0"
+id = "artifacts/prep-room"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19395
+
+[services.development]
+run = "pnpm --filter @workspace/prep-room run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/prep-room", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/prep-room/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19395"
+BASE_PATH = "/"

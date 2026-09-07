@@ -1,0 +1,3 @@
+import type { Difficulty, Scenario } from "./types";
+export function isDifficulty(value: unknown): value is Difficulty { return value === "gentle" || value === "realistic" || value === "tough"; }
+export function readScenario(value: unknown): Scenario | null { if (!value || typeof value !== "object") return null; const v = value as Record<string, unknown>; const counterpart = typeof v.counterpart === "string" ? v.counterpart.trim().slice(0, 400) : ""; if (!counterpart) return null; return { counterpart, situation: typeof v.situation === "string" ? v.situation.trim().slice(0, 800) : "", opening: typeof v.opening === "string" ? v.opening.trim().slice(0, 800) : "", difficulty: isDifficulty(v.difficulty) ? v.difficulty : "realistic" }; }

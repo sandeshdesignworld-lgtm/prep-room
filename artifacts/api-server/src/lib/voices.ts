@@ -1,0 +1,2 @@
+const speakers = ["shubh","aditya","ritu","ashutosh","priya","neha","rahul","pooja","rohan","simran","kavya","amit","dev","ishita","shreya","ratan","varun","manan","sumit","roopa","kabir","aayan","advait","anand","tanya","tarun","sunny","mani","gokul","vijay","shruti","suhani","mohit","kavitha","rehan","soham","rupali"];
+export function isSpeaker(value: unknown): value is string { return typeof value === "string" && speakers.includes(value); }
