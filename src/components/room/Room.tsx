@@ -19,8 +19,9 @@ import {
   summariseSignals,
   useSignalCapture,
 } from "@/lib/signals";
-import { newMessage, newSession, saveProfile, saveSession, titleFor } from "@/lib/storage";
+import { newMessage, newSession, saveProfile, saveSession, titleFor, uid } from "@/lib/storage";
 import type {
+  CuePoint,
   Debrief,
   Difficulty,
   Message,
@@ -75,6 +76,17 @@ export default function Room({
   // Same rule as auto-send: no stored preference means on. A coach with a face
   // is the default experience; the toggle is for people who'd rather not.
   const [avatarOn, setAvatarOn] = useState(profile.avatar ?? true);
+
+  /**
+   * The session as it stands right now, readable from callbacks that outlive
+   * the render they were created in. Work that arrives late (a cue request
+   * that took three seconds) needs the current thread, not the one that was on
+   * screen when it was sent.
+   */
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const avatarContainerRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -186,6 +198,54 @@ export default function Room({
     return stamped;
   }, []);
 
+  /**
+   * The takeaways from one exchange, fetched once the coach has finished
+   * saying it. After, never during: nothing may land on screen while the user
+   * is still mid-answer, which is the same rule the debrief follows.
+   *
+   * Deliberately not awaited by the send path and deliberately silent on
+   * failure. A cue that doesn't arrive costs the user nothing; a spinner or an
+   * error where a piece of advice should be costs them the thread.
+   */
+  const collectCues = useCallback(
+    async (base: Session) => {
+      try {
+        const res = await fetch("/api/cues", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mode: base.mode,
+            messages: base.messages.map(({ role, content }) => ({ role, content })),
+          }),
+        });
+        if (!res.ok) return;
+        const payload = (await res.json()) as { cues?: string[] };
+        const fresh = (payload.cues ?? []).filter(Boolean);
+        if (fresh.length === 0) return;
+
+        const current = sessionRef.current;
+        // The thread has moved on (a new conversation, a reset). These cues
+        // belong to a session that is no longer on screen.
+        if (current.id !== base.id) return;
+
+        const now = new Date().toISOString();
+        const existing = current.cues ?? [];
+        // The coach repeats itself across turns, and the same advice arriving
+        // twice as two identical cards would make the list look broken.
+        const seen = new Set(existing.map((c) => c.text.toLowerCase()));
+        const added: CuePoint[] = fresh
+          .filter((text) => !seen.has(text.toLowerCase()))
+          .map((text) => ({ id: uid(), text, source: "advice" as const, createdAt: now }));
+        if (added.length === 0) return;
+
+        persist({ ...current, cues: [...existing, ...added] });
+      } catch {
+        // Offline, or the request was cut short. The conversation is unaffected.
+      }
+    },
+    [persist]
+  );
+
   /* --------------------------- the advice thread -------------------------- */
 
   /** Streams one coach reply onto the end of `base`. Never appends a user turn. */
@@ -232,10 +292,11 @@ export default function Room({
         flushSpeech(received);
 
         if (received.trim()) {
-          persist({
+          const answered = persist({
             ...base,
             messages: [...base.messages, newMessage("assistant", received.trim())],
           });
+          void collectCues(answered);
         } else {
           setError("The coach went quiet. Try sending that again.");
         }
@@ -258,7 +319,16 @@ export default function Room({
         setStreamText("");
       }
     },
-    [persist, profile.about, profile.goal, cancelSpeech, resetSpeech, feedSpeech, flushSpeech]
+    [
+      persist,
+      profile.about,
+      profile.goal,
+      cancelSpeech,
+      resetSpeech,
+      feedSpeech,
+      flushSpeech,
+      collectCues,
+    ]
   );
 
   /* ----------------------------- the rehearsal ---------------------------- */
@@ -395,7 +465,21 @@ export default function Room({
         endedAt: new Date().toISOString(),
         signals: kept,
       };
-      persist({ ...session, roleplay, debrief: result });
+      // The debrief's spoken cues join the same running list, so a rehearsal
+      // leaves something on screen once the card has been scrolled past.
+      const now = new Date().toISOString();
+      const fromDebrief: CuePoint[] = (result.cues ?? []).map((text) => ({
+        id: uid(),
+        text,
+        source: "debrief" as const,
+        createdAt: now,
+      }));
+      persist({
+        ...session,
+        roleplay,
+        debrief: result,
+        cues: [...(session.cues ?? []), ...fromDebrief],
+      });
       setStage("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't put the debrief together.");
@@ -685,7 +769,10 @@ export default function Room({
 
   return (
     <div className="flex min-h-full flex-col md:h-full md:min-h-0 md:flex-row">
-      <div className="flex min-w-0 flex-col gap-2.5 p-3 md:min-h-0 md:flex-1 md:p-4">
+      {/* One block, centred: the stage and the read underneath it share a width
+          and sit together, rather than a tile adrift in a wide column with the
+          cards stretched across the bottom of it. */}
+      <div className="mx-auto flex w-full min-w-0 max-w-[34rem] flex-col justify-center gap-2.5 p-3 md:min-h-0 md:flex-1 md:p-4">
         <Stage
           avatarContainerRef={avatarContainerRef}
           avatarStatus={avatar.status}
@@ -723,6 +810,7 @@ export default function Room({
         onToggleSpeak={toggleSpeak}
         onNewConversation={() => startFresh()}
         showTranscript={showTranscript}
+        cues={session.cues ?? []}
         draft={draft}
         onDraftChange={setDraft}
         onSend={send}

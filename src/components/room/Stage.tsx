@@ -15,7 +15,46 @@ import type { LiveRead } from "@/lib/signals-math";
  * explaining a problem, and takes half the stage the moment a rehearsal starts,
  * because that is when what their body is doing becomes the thing being
  * practised.
+ *
+ * The stage is capped rather than stretched to whatever the window offers. A
+ * call tile is a fixed thing you sit in front of; a stage that grows with the
+ * browser leaves a small face adrift in a field of grey, which is what this
+ * was. The cap is portrait, because the avatar is, so the picture fills the
+ * frame instead of being letterboxed inside it.
  */
+
+/**
+ * A contained tile, centred, portrait to match the avatar. Capped in both
+ * directions so a large monitor gets more room around the room, not a
+ * life-size head.
+ */
+const STAGE = [
+  "mx-auto w-full",
+  "max-w-[min(100%,30rem)] md:max-w-[min(100%,34rem)]",
+  "md:max-h-[min(100%,40rem)]",
+].join(" ");
+
+/**
+ * Shorter, for when there is no avatar to fill it.
+ *
+ * A portrait frame is the right shape around a person and the wrong shape
+ * around a monogram: the same box that fits the coach exactly leaves a small
+ * circle stranded in the middle of it. Voice-only is a complete way to run this
+ * app, not a broken one, and it should not look like a picture failed to load.
+ *
+ * Chosen from the SETTING, not from whether the avatar has finished loading.
+ * AvatarKit sizes its canvas to this box through a ResizeObserver, so a box
+ * that changes height the moment the coach arrives makes the renderer catch up
+ * mid-frame. The setting is known before the SDK mounts and does not move.
+ */
+const STAGE_VOICE_ONLY = [
+  "mx-auto w-full",
+  "max-w-[min(100%,30rem)] md:max-w-[min(100%,34rem)]",
+  "md:max-h-[min(100%,22rem)]",
+].join(" ");
+
+/** Split for a rehearsal it holds two panes, so it is allowed to be wider. */
+const STAGE_SPLIT = "mx-auto w-full max-w-full md:max-h-[min(100%,36rem)]";
 
 function CameraIcon({ on }: { on: boolean }) {
   return (
@@ -136,7 +175,13 @@ export default function Stage({
   endDisabled: boolean;
 }) {
   return (
-    <div className="relative flex h-[42vh] w-full shrink-0 flex-col overflow-hidden rounded-2xl border bg-fill hairline md:h-auto md:min-h-0 md:flex-1 md:flex-row">
+    <div
+      className={[
+        "relative flex h-[42vh] w-full shrink-0 flex-col overflow-hidden rounded-2xl border bg-fill hairline",
+        "md:h-auto md:min-h-0 md:flex-1 md:flex-row",
+        practising ? STAGE_SPLIT : avatarOn ? STAGE : STAGE_VOICE_ONLY,
+      ].join(" ")}
+    >
       <div className={practising ? "relative min-h-0 min-w-0 flex-1" : "absolute inset-0"}>
         <CoachFace
           containerRef={avatarContainerRef}

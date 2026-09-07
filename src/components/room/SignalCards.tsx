@@ -78,7 +78,7 @@ function Card({
 }) {
   const good = status === "good";
   return (
-    <div className="min-w-0 flex-1 rounded-xl border bg-card hairline px-3 py-2.5">
+    <div className="min-w-0 rounded-xl border bg-card hairline px-3 py-2.5">
       <div className="flex items-center gap-2">
         <span
           aria-hidden
@@ -108,8 +108,12 @@ export default function SignalCards({
   read: LiveRead | null;
   restingNote: string;
 }) {
+  // Two by two, at every width. The column this sits in is capped at 34rem
+  // whatever the window is doing, so a viewport breakpoint that widens the grid
+  // to four does not widen the space they are in: it just clips every label to
+  // "Eye con...".
   return (
-    <div className="flex gap-2 overflow-x-auto pb-0.5">
+    <div className="grid grid-cols-2 gap-2">
       {CARDS.map((c) => {
         const status = read?.[c.key] ?? null;
         return (

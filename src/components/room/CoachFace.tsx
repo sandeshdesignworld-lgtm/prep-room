@@ -18,7 +18,7 @@ import { AVATAR_LOADING_MESSAGE, type AvatarFailure, type AvatarStatus } from "@
 
 function Monogram({ speaking }: { speaking: boolean }) {
   return (
-    <span className="relative flex h-16 w-16 items-center justify-center">
+    <span className="relative flex h-20 w-20 items-center justify-center">
       {speaking && (
         <span
           aria-hidden
@@ -28,7 +28,7 @@ function Monogram({ speaking }: { speaking: boolean }) {
       )}
       <span
         aria-hidden
-        className="relative flex h-16 w-16 items-center justify-center rounded-full bg-coral/12 text-lg font-semibold tracking-tight text-coral"
+        className="relative flex h-20 w-20 items-center justify-center rounded-full bg-coral/12 text-xl font-semibold tracking-tight text-coral"
       >
         P
       </span>
@@ -36,16 +36,7 @@ function Monogram({ speaking }: { speaking: boolean }) {
   );
 }
 
-/**
- * How much of the stage the coach takes.
- *
- * AvatarKit fills whatever box it is mounted in, so this box IS the size of the
- * coach. Filling the stage made a head roughly life-size on a laptop, which is
- * closer than anyone sits to a person they are nervous about talking to. This
- * is a video tile: portrait, comfortably inside the frame, and the same
- * proportion of the stage whether the stage is whole or split for a rehearsal.
- */
-const FRAME = "h-[78%] max-h-[440px] w-auto min-w-[180px] aspect-[3/4]";
+
 
 export default function CoachFace({
   containerRef,
@@ -78,17 +69,18 @@ export default function CoachFace({
       <AvatarBoundary onFail={() => onFail("crashed")}>
         {/* Stays mounted across status changes: the SDK owns the canvas inside
             it, so swapping this box out from under it would strand the renderer. */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            ref={containerRef}
-            aria-hidden
-            className={[
-              FRAME,
-              "transition-opacity duration-700",
-              ready ? "opacity-100" : "pointer-events-none opacity-0",
-            ].join(" ")}
-          />
-        </div>
+        {/* Fills the stage, because the stage is now the size of the coach.
+            Holding the avatar to a small box inside a large one is what left a
+            face marooned in grey; the size is decided by the frame around this
+            (see Stage), and here the picture simply fills what it is given. */}
+        <div
+          ref={containerRef}
+          aria-hidden
+          className={[
+            "absolute inset-0 transition-opacity duration-700",
+            ready ? "opacity-100" : "pointer-events-none opacity-0",
+          ].join(" ")}
+        />
       </AvatarBoundary>
 
       {!ready && (
