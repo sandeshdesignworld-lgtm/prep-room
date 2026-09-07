@@ -92,7 +92,13 @@ export default function Room({
   // Tied to read-aloud because the avatar IS the voice: it is driven by the
   // coach's own speech audio, so with replies not being read out there is
   // nothing to drive it and no reason to pull ten megabytes of assets.
-  const avatar = useAvatar({ enabled: avatarOn && speakOn, container: avatarContainerRef });
+  const avatar = useAvatar({
+    enabled: avatarOn,
+    // Read-aloud off is passed in rather than folded into `enabled`, so the
+    // hook can say "turn read-aloud on" instead of going quiet.
+    voiced: speakOn,
+    container: avatarContainerRef,
+  });
 
   const speaker = useSpeaker({ enabled: speakOn, speaker: profile.voice, sink: avatar.sink });
   // Destructured because useSpeaker hands back a fresh object every render, so
@@ -672,9 +678,10 @@ export default function Room({
         <Stage
           avatarContainerRef={avatarContainerRef}
           avatarStatus={avatar.status}
+          avatarFailure={avatar.failure}
           avatarOn={avatarOn}
           onToggleAvatar={toggleAvatar}
-          onAvatarFail={() => setAvatarOn(false)}
+          onAvatarFail={avatar.reportCrash}
           coachSpeaking={coachSpeaking}
           presence={presence}
           videoRef={videoRef}

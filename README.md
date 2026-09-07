@@ -88,7 +88,8 @@ npm run lint
 | `src/lib/speech.ts` | Web Speech API layer, dictation and read-aloud hooks. Feature-detects; the app works fully without either. Routes the coach's audio to the avatar when there is one. |
 | `src/lib/spatius.ts` | Server-only Spatius client: config, and short-lived session tokens. The API key never reaches the browser. |
 | `src/app/api/avatar/route.ts` | `GET /api/avatar` hands the browser the app id, avatar id and a session token, or `available: false`. |
-| `src/lib/avatar.ts` | Loads and drives AvatarKit in Direct Mode. Every failure path lands on voice-only. |
+| `src/lib/avatar.ts` | Loads and drives AvatarKit in Direct Mode. Every failure path lands on voice-only, named, logged, and shown as a dev note. |
+| `src/lib/theme.ts` | Light or dark, light by default. The system setting is deliberately not consulted. |
 | `src/lib/pcm.ts` | The coach's mp3 to mono PCM16 for the motion server. The float-to-PCM half is pure and tested. |
 | `src/components/room/Stage.tsx` | Coach centre, self-view as a corner picture that takes half the stage during a rehearsal, call controls over both. |
 | `src/lib/speech-text.ts` | Pure sentence-chunking and speech-sanitising helpers, kept testable. |
@@ -118,6 +119,19 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **Crisp White is the default, everywhere.** The palette no longer has a
+  `prefers-color-scheme` rule; a laptop set to dark still opens the app light.
+  Dark is opt-in through one switch (the rail, and Your data), stored per
+  device and applied before first paint. `color-scheme` follows the class, so
+  scrollbars and form controls stop being painted dark under a light page.
+- **The avatar never fails silently.** Every way it can not happen has a name
+  (`muted`, `no-voice`, `not-configured`, `config-failed`, `sdk-failed`,
+  `assets-failed`, `connect-failed`, `timeout`, `runtime`, `crashed`), each
+  logged to the console with what broke and what to do, and shown as an amber
+  dev note on the stage outside production. `GET /api/avatar` names which
+  environment variable is unset, in its own log always and in its response body
+  outside production. The most common cause by far is read-aloud simply being
+  off, which now says so and points at the speaker button.
 - **The home screen.** Done. Every session opens on a doorway, not a live call:
   a serif headline, one line on how it works, and the three modes as cards.
   Nothing starts until a card is tapped — no camera, no microphone, no avatar —

@@ -132,14 +132,14 @@ export default function Home({
         {goal?.trim() && (
           <p className="mt-6 text-sm leading-relaxed text-ink-2">
             You said you wanted to{" "}
-            <span className="text-ink">{lowerFirst(goal.trim())}</span> — pick whichever of these
+            <span className="text-ink">{lowerFirst(goal.trim())}</span>. Pick whichever of these
             gets you closest.
           </p>
         )}
 
         <p className="mt-8 text-xs leading-relaxed text-ink-3">
           Your camera only switches on once you pick one, and it&apos;s read entirely on this
-          device — no video is ever recorded or uploaded. PrepRoom is a practice aid for
+          device. No video is ever recorded or uploaded. PrepRoom is a practice aid for
           communication, not therapy or a diagnosis.
         </p>
       </div>

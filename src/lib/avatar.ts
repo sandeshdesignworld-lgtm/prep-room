@@ -31,18 +31,116 @@ export const AVATAR_LOAD_TIMEOUT_MS = 30000;
 /** Closes a speech turn. Inaudible, and long enough for the server to finalise. */
 const END_SILENCE_MS = 60;
 
-export type AvatarStatus =
-  | "off"
-  | "unavailable"
-  | "loading"
-  | "ready"
-  | "failed";
+export type AvatarStatus = "off" | "loading" | "ready" | "failed";
 
-export const AVATAR_MESSAGE: Record<Exclude<AvatarStatus, "off" | "ready">, string> = {
-  unavailable: "Voice only for now. Your coach is here, just without a face.",
-  loading: "Bringing your coach in…",
-  failed: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
+/**
+ * Every way this can not happen, named.
+ *
+ * The fallback is meant to be invisible to a user mid-conversation, and it
+ * should stay that way. But "invisible to the user" turned into "invisible to
+ * whoever is building the thing", which is how you end up staring at a monogram
+ * with no idea whether the credentials are wrong, the network is down, or you
+ * simply have read-aloud switched off. Each of these logs a line saying which
+ * one it was and what to do about it.
+ */
+export type AvatarFailureCode =
+  | "muted"
+  | "no-voice"
+  | "not-configured"
+  | "config-failed"
+  | "sdk-failed"
+  | "assets-failed"
+  | "connect-failed"
+  | "timeout"
+  | "runtime"
+  | "crashed";
+
+export interface AvatarFailure {
+  code: AvatarFailureCode;
+  /** Shown to the user. Says what they get, and what to press if they can fix it. */
+  message: string;
+  /** Shown only outside production, and always logged. Says what actually broke. */
+  detail: string;
+}
+
+const FAILURE: Record<AvatarFailureCode, { message: string; detail: string }> = {
+  muted: {
+    message:
+      "Your coach's face needs read-aloud on. Tap the speaker above the transcript and they'll appear.",
+    detail:
+      "Read-aloud is off. The avatar is driven by the coach's own speech audio, so with nothing to speak there is nothing to drive it, and the SDK is deliberately not loaded.",
+  },
+  "no-voice": {
+    message: "Voice only for now. Your coach is here, just without a face.",
+    detail:
+      "Sarvam is not configured, so there is no coach audio to drive the avatar with. Set SARVAM_API_KEY in .env.local and restart the dev server.",
+  },
+  "not-configured": {
+    message: "Voice only for now. Your coach is here, just without a face.",
+    detail:
+      "GET /api/avatar reported the avatar is not set up. Set SPATIUS_APP_ID, SPATIUS_API_KEY and SPATIUS_AVATAR_ID in .env.local and restart the dev server. The server log names which one is missing.",
+  },
+  "config-failed": {
+    message: "Voice only for now. Your coach is here, just without a face.",
+    detail:
+      "GET /api/avatar failed. Either the app can't be reached or the Spatius console rejected the session-token request; the server log has the status.",
+  },
+  "sdk-failed": {
+    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
+    detail:
+      "@spatius/avatarkit failed to import or initialize. Usually the WASM assets: check that next.config.mjs still wraps the config in withAvatarkit and that /_avatarkit/*.wasm returns 200 with content-type application/wasm.",
+  },
+  "assets-failed": {
+    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
+    detail:
+      "The avatar assets failed to download. Check SPATIUS_AVATAR_ID names an avatar this account owns, and that the network allows the Spatius CDN.",
+  },
+  "connect-failed": {
+    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
+    detail:
+      "Connecting to the motion server failed. A rejected session token, an expired one, or no route to api.<region>.spatius.ai.",
+  },
+  timeout: {
+    message: "Your coach took too long to arrive, so this one is voice only.",
+    detail: `Nothing was ready within ${AVATAR_LOAD_TIMEOUT_MS}ms. Usually a slow connection pulling the avatar assets; the network tab will show what was still in flight.`,
+  },
+  runtime: {
+    message: "Lost your coach's picture, so the rest of this is voice only.",
+    detail:
+      "AvatarKit reported an error or dropped its connection after it had started. The code beside this line is the SDK's own.",
+  },
+  crashed: {
+    message: "Your coach's avatar stopped working, so this one is voice only.",
+    detail: "The avatar render tree threw and was removed by the error boundary.",
+  },
 };
+
+/** Still spoken while the SDK is on its way. */
+export const AVATAR_LOADING_MESSAGE = "Bringing your coach in…";
+
+/**
+ * One place that says it out loud. Every fallback goes through here, so there
+ * is no path from "it works" to "a monogram" that leaves nothing in the console.
+ */
+function failureOf(code: AvatarFailureCode, detail?: string): AvatarFailure {
+  const base = FAILURE[code];
+  return {
+    code,
+    message: base.message,
+    detail: detail ? `${base.detail}\n  Underlying: ${detail}` : base.detail,
+  };
+}
+
+function logFailure(failure: AvatarFailure): void {
+  // Read-aloud being off is a setting, not a fault, so it doesn't shout.
+  const log = failure.code === "muted" ? console.info : console.error;
+  log(
+    `[PrepRoom avatar] falling back to voice-only (${failure.code}).\n  ${failure.detail}\n  The session is unaffected: the coach still talks, and everything else works.`
+  );
+}
+
+/** Derived rather than stored, so it needs no state write. */
+const MUTED = failureOf("muted");
 
 /** What the speaker hands audio to when the avatar is the one talking. */
 export interface AvatarSink {
@@ -55,8 +153,16 @@ export interface AvatarSink {
   interrupt: () => void;
 }
 
+/** Anything thrown, as one line worth logging. */
+function message(err: unknown): string {
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
+}
+
 interface Config {
   available: boolean;
+  /** Development only: which piece of configuration is missing. */
+  reason?: string;
   appId?: string;
   avatarId?: string;
   region?: string;
@@ -78,9 +184,12 @@ type View = { controller: Controller; dispose: () => void; onFirstRendering?: ()
 
 export function useAvatar({
   enabled,
+  /** False when read-aloud is off, which is a fixable reason rather than a fault. */
+  voiced = true,
   container,
 }: {
   enabled: boolean;
+  voiced?: boolean;
   container: React.RefObject<HTMLDivElement | null>;
 }) {
   /**
@@ -90,6 +199,16 @@ export function useAvatar({
    * whatever the last attempt happened to end at.
    */
   const [loaded, setLoaded] = useState<AvatarStatus>("loading");
+  /** Why there's no face, when there isn't one. Null while it's fine. */
+  const [failure, setFailure] = useState<AvatarFailure | null>(null);
+
+  /** Records the reason, logs it, and drops to voice-only. */
+  const fail = useCallback((code: AvatarFailureCode, detail?: string) => {
+    const next = failureOf(code, detail);
+    logFailure(next);
+    setFailure(next);
+    setLoaded("failed");
+  }, []);
   /** True while the avatar is actually saying something. Drives barge-in. */
   const [speaking, setSpeaking] = useState(false);
 
@@ -117,7 +236,7 @@ export function useAvatar({
   useEffect(() => {
     // Nothing to set up, and nothing to tear down here either: switching the
     // avatar off runs the previous run's cleanup, which is where teardown lives.
-    if (!enabled) return;
+    if (!enabled || !voiced) return;
 
     const runId = ++runRef.current;
     const live = () => runRef.current === runId;
@@ -129,46 +248,77 @@ export function useAvatar({
     const deadline = window.setTimeout(() => {
       if (!live() || readyRef.current) return;
       timedOut = true;
-      console.warn("[avatar] gave up after", AVATAR_LOAD_TIMEOUT_MS, "ms");
       teardown();
-      setLoaded("failed");
+      fail("timeout");
     }, AVATAR_LOAD_TIMEOUT_MS);
 
     const boot = async () => {
       setLoaded("loading");
+      setFailure(null);
 
       // The avatar is driven by the coach's own TTS audio. Without Bulbul there
       // is no audio to drive it with, and an avatar sitting still while the
       // browser's robot voice talks over it is worse than no avatar at all.
       if ((await resolveEngine()) !== "bulbul") {
-        if (live()) setLoaded("unavailable");
+        if (live()) fail("no-voice");
         return;
       }
 
-      const res = await fetch("/api/avatar", { cache: "no-store" });
-      const config = (res.ok ? await res.json() : { available: false }) as Config;
+      let config: Config;
+      try {
+        const res = await fetch("/api/avatar", { cache: "no-store" });
+        if (!res.ok) throw new Error(`GET /api/avatar responded ${res.status}`);
+        config = (await res.json()) as Config;
+      } catch (err) {
+        if (live() && !timedOut) fail("config-failed", message(err));
+        return;
+      }
       if (!live() || timedOut) return;
       if (!config.available || !config.appId || !config.avatarId || !config.sessionToken) {
-        setLoaded("unavailable");
+        fail("not-configured", config.reason ?? "the server reported available: false");
         return;
       }
 
-      const kit = await import("@spatius/avatarkit");
-      if (!live() || timedOut) return;
+      // Everything below is the Direct Mode order from the Web SDK reference:
+      // initialize with the app id, set the session token, load the avatar,
+      // mount a view, open the audio context inside a gesture, then connect.
+      let kit: typeof import("@spatius/avatarkit");
+      try {
+        kit = await import("@spatius/avatarkit");
+        if (!live() || timedOut) return;
+        await kit.AvatarSDK.initialize(config.appId, {
+          region: config.region,
+          drivingServiceMode: kit.DrivingServiceMode.direct,
+          // The SDK's own logging, on in development. It is the only thing that
+          // can explain a failure inside the renderer.
+          logLevel:
+            process.env.NODE_ENV === "production" ? kit.LogLevel.error : kit.LogLevel.warning,
+          audioFormat: { channelCount: 1, sampleRate: AVATAR_SAMPLE_RATE },
+        });
+        kit.AvatarSDK.setSessionToken(config.sessionToken);
+      } catch (err) {
+        if (live() && !timedOut) fail("sdk-failed", message(err));
+        return;
+      }
 
-      await kit.AvatarSDK.initialize(config.appId, {
-        region: config.region,
-        drivingServiceMode: kit.DrivingServiceMode.direct,
-        logLevel: kit.LogLevel.error,
-        audioFormat: { channelCount: 1, sampleRate: AVATAR_SAMPLE_RATE },
-      });
-      kit.AvatarSDK.setSessionToken(config.sessionToken);
-
-      const avatar = await kit.AvatarManager.shared.load(config.avatarId);
+      let avatar: Awaited<ReturnType<typeof kit.AvatarManager.shared.load>>;
+      try {
+        avatar = await kit.AvatarManager.shared.load(config.avatarId, (progress) => {
+          if (progress.type === "failed") {
+            console.error("[PrepRoom avatar] asset download failed", progress.error);
+          }
+        });
+      } catch (err) {
+        if (live() && !timedOut) fail("assets-failed", message(err));
+        return;
+      }
       if (!live() || timedOut) return;
 
       const mount = container.current;
-      if (!mount) throw new Error("avatar container went away");
+      if (!mount) {
+        fail("assets-failed", "the container element was gone before the view could mount");
+        return;
+      }
 
       const view = new kit.AvatarView(avatar, mount) as unknown as View;
       viewRef.current = view;
@@ -182,38 +332,53 @@ export function useAvatar({
         // voice back to the browser rather than going quiet.
         if (live() && state === "failed") {
           readyRef.current = false;
-          setLoaded("failed");
+          fail("runtime", "the motion-server connection reported state: failed");
         }
       };
       controller.onError = (error) => {
-        console.error("[avatar]", error?.code, error?.message);
         if (!live()) return;
         readyRef.current = false;
-        setLoaded("failed");
+        fail("runtime", `AvatarKit error ${error?.code ?? "(no code)"}: ${error?.message ?? ""}`);
       };
 
-      // The room is entered by clicking, so the gesture requirement is already
-      // satisfied; if it isn't, this throws and we fall back like anything else.
-      await controller.initializeAudioContext();
-      await controller.start();
+      try {
+        // Entering the room now always follows a click on the home screen, so
+        // the gesture requirement is satisfied. If it ever isn't, this throws
+        // and says so rather than leaving a mute avatar on screen.
+        await controller.initializeAudioContext();
+        await controller.start();
+      } catch (err) {
+        if (live() && !timedOut) fail("connect-failed", message(err));
+        return;
+      }
       if (!live() || timedOut) return;
 
       readyRef.current = true;
+      setFailure(null);
       setLoaded("ready");
+      console.info(
+        `[PrepRoom avatar] ready. avatar ${config.avatarId} in ${config.region ?? "us-west"}, driving audio at ${AVATAR_SAMPLE_RATE}Hz.`
+      );
     };
 
     boot().catch((err) => {
-      console.error("[avatar] failed to load", err);
       if (!live()) return;
       teardown();
-      setLoaded("failed");
+      fail("sdk-failed", message(err));
     });
 
     return () => {
       window.clearTimeout(deadline);
       teardown();
     };
-  }, [enabled, container, teardown]);
+  }, [enabled, voiced, container, teardown, fail]);
+
+  // Read-aloud off isn't a fault, but it is the single most common reason to be
+  // looking at a monogram and it is one tap to fix, so it still says so once.
+  const muted = enabled && !voiced;
+  useEffect(() => {
+    if (muted) logFailure(MUTED);
+  }, [muted]);
 
   /**
    * Handed to the speaker. Every method is a no-op when the avatar isn't
@@ -263,7 +428,20 @@ export function useAvatar({
       }
     },
   }), []);
-  const status: AvatarStatus = enabled ? loaded : "off";
+  /**
+   * The error boundary's way in. A throw inside the render tree is the one
+   * failure the hook cannot see for itself, and it has to land in the same
+   * place as every other one rather than silently blanking the canvas.
+   */
+  const reportCrash = useCallback(() => {
+    teardown();
+    fail("crashed");
+  }, [teardown, fail]);
 
-  return { status, speaking, sink };
+  // Muted is derived, not stored: it is a straight function of a prop, and
+  // writing it into state from an effect would be a render for nothing.
+  const status: AvatarStatus = !enabled ? "off" : muted ? "failed" : loaded;
+  const shown = muted ? MUTED : status === "failed" ? failure : null;
+
+  return { status, speaking, sink, failure: shown, reportCrash };
 }

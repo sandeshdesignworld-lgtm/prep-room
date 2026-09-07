@@ -1,4 +1,14 @@
-import { spatiusConfig, sessionToken } from "@/lib/spatius";
+import { missingSpatiusVars, spatiusConfig, sessionToken } from "@/lib/spatius";
+
+/**
+ * Names of unset environment variables are about this deployment, not about any
+ * user, so they are safe to hand back while someone is building. They are still
+ * withheld in production, where nobody is reading them and the only audience is
+ * a stranger with the URL.
+ */
+function diagnostic(reason: string): string | undefined {
+  return process.env.NODE_ENV === "production" ? undefined : reason;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +23,16 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const config = spatiusConfig();
   if (!config) {
-    return Response.json({ available: false }, { headers: { "cache-control": "no-store" } });
+    const missing = missingSpatiusVars();
+    const reason = `not configured: ${missing.join(", ")} ${
+      missing.length === 1 ? "is" : "are"
+    } unset. Add them to .env.local and restart the dev server.`;
+    // Logged in every environment, so a silent avatar always has a paper trail.
+    console.warn(`[/api/avatar] ${reason}`);
+    return Response.json(
+      { available: false, reason: diagnostic(reason) },
+      { headers: { "cache-control": "no-store" } }
+    );
   }
 
   try {
@@ -24,9 +43,14 @@ export async function GET(request: Request) {
     );
   } catch (err) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
-    // Logged, not surfaced: the user gets a coach with no face, which is the
-    // documented fallback, rather than an error about a vendor they never chose.
-    console.error("[/api/avatar]", err);
-    return Response.json({ available: false }, { headers: { "cache-control": "no-store" } });
+    // The user gets a coach with no face, which is the documented fallback,
+    // rather than an error about a vendor they never chose. But it is always
+    // logged here, and handed back while developing, so it is never a mystery.
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[/api/avatar] session token request failed:", detail);
+    return Response.json(
+      { available: false, reason: diagnostic(`session token request failed: ${detail}`) },
+      { headers: { "cache-control": "no-store" } }
+    );
   }
 }

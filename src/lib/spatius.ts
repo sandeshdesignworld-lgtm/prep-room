@@ -38,12 +38,21 @@ export interface SpatiusConfig {
   region: string;
 }
 
+/** Which of the three is missing, in the order someone would fix them. */
+export function missingSpatiusVars(): string[] {
+  return (["SPATIUS_APP_ID", "SPATIUS_API_KEY", "SPATIUS_AVATAR_ID"] as const).filter(
+    (name) => !process.env[name]?.trim()
+  );
+}
+
 /** Null when the avatar isn't set up, which is a perfectly fine way to run. */
 export function spatiusConfig(): SpatiusConfig | null {
-  const appId = process.env.SPATIUS_APP_ID?.trim();
-  const avatarId = process.env.SPATIUS_AVATAR_ID?.trim();
-  if (!appId || !avatarId || !process.env.SPATIUS_API_KEY) return null;
-  return { appId, avatarId, region: spatiusRegion() };
+  if (missingSpatiusVars().length > 0) return null;
+  return {
+    appId: process.env.SPATIUS_APP_ID!.trim(),
+    avatarId: process.env.SPATIUS_AVATAR_ID!.trim(),
+    region: spatiusRegion(),
+  };
 }
 
 interface CachedToken {

@@ -2,7 +2,7 @@
 
 import type { RefObject } from "react";
 import AvatarBoundary from "./AvatarBoundary";
-import { AVATAR_MESSAGE, type AvatarStatus } from "@/lib/avatar";
+import { AVATAR_LOADING_MESSAGE, type AvatarFailure, type AvatarStatus } from "@/lib/avatar";
 
 /**
  * The coach, centre stage. Present from the first message: you land in a room
@@ -39,6 +39,7 @@ function Monogram({ speaking }: { speaking: boolean }) {
 export default function CoachFace({
   containerRef,
   status,
+  failure,
   speaking,
   presence,
   onFail,
@@ -46,18 +47,24 @@ export default function CoachFace({
   /** Where AvatarKit mounts its canvas. Must be a sized, non-zero box. */
   containerRef: RefObject<HTMLDivElement | null>;
   status: AvatarStatus;
+  /** Why there's no face. Null when there is one, or when it was switched off. */
+  failure: AvatarFailure | null;
   /** True while the coach is talking, whichever way the audio is coming out. */
   speaking: boolean;
   /** The chip in the top-left: what the coach is doing right now. */
   presence: string;
-  onFail: () => void;
+  onFail: (reason: "crashed") => void;
 }) {
   const ready = status === "ready";
-  const note = status === "off" || ready ? null : AVATAR_MESSAGE[status];
+  const note = status === "loading" ? AVATAR_LOADING_MESSAGE : (failure?.message ?? null);
+  // The detail names the actual cause. It belongs in front of whoever is
+  // building this and nowhere near a student mid-interview, so it is
+  // development-only; the same text is logged in every environment.
+  const detail = process.env.NODE_ENV === "production" ? null : failure?.detail;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-fill">
-      <AvatarBoundary onFail={onFail}>
+      <AvatarBoundary onFail={() => onFail("crashed")}>
         {/* Stays mounted across status changes: the SDK owns the canvas inside
             it, so swapping this box out from under it would strand the renderer. */}
         <div
@@ -73,10 +80,19 @@ export default function CoachFace({
       {!ready && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
           <Monogram speaking={speaking} />
-          {status === "loading" ? (
-            <p className="text-sm text-ink-2">{AVATAR_MESSAGE.loading}</p>
-          ) : (
-            note && <p className="max-w-xs text-sm leading-relaxed text-ink-2">{note}</p>
+          {note && <p className="max-w-sm text-sm leading-relaxed text-ink-2">{note}</p>}
+          {detail && (
+            <div className="max-w-md rounded-xl border border-amber/50 bg-amber/10 px-3 py-2 text-left">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-on-amber">
+                Dev note · avatar fell back ({failure?.code})
+              </p>
+              <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
+                {detail}
+              </p>
+              <p className="mt-1 text-[11px] text-ink-3">
+                Only shown outside production. The same text is in the console.
+              </p>
+            </div>
           )}
         </div>
       )}
