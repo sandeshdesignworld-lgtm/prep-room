@@ -1,0 +1,20 @@
+modules = ["nodejs-20", "web"]
+
+run = ["npm", "run", "dev"]
+
+# Next serves on $PORT, which Replit sets. 80 is what the outside world sees.
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
+
+[env]
+# Nothing about a build needs reporting to anyone.
+NEXT_TELEMETRY_DISABLED = "1"
+
+[nix]
+channel = "stable-25_05"
