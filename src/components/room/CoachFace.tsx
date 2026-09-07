@@ -2,7 +2,7 @@
 
 import type { RefObject } from "react";
 import AvatarBoundary from "./AvatarBoundary";
-import { AVATAR_LOADING_MESSAGE, type AvatarFailure, type AvatarStatus } from "@/lib/avatar";
+import type { AvatarStatus } from "@/lib/avatar";
 
 /**
  * The coach, centre stage. Present from the first message: you land in a room
@@ -13,7 +13,14 @@ import { AVATAR_LOADING_MESSAGE, type AvatarFailure, type AvatarStatus } from "@
  * When the avatar is off, unavailable or has failed, this is a monogram that
  * pulses while the coach speaks. That fallback is not a placeholder for a
  * missing feature, it is the app as it has always worked, and nothing else on
- * screen changes when it appears.
+ * screen changes when it appears, INCLUDING any explanation of why.
+ *
+ * Nothing about how this works reaches the page. No reason, no error, no note
+ * about credentials or read-aloud or a motion server. Someone is here to
+ * rehearse a conversation they are dreading; a machine explaining itself to
+ * them is noise at best, and at worst it makes a perfectly good voice-only
+ * session look broken. Every one of those reasons is logged instead, in one
+ * line, for whoever is building this. See lib/avatar.ts.
  */
 
 function Monogram({ speaking }: { speaking: boolean }) {
@@ -41,7 +48,6 @@ function Monogram({ speaking }: { speaking: boolean }) {
 export default function CoachFace({
   containerRef,
   status,
-  failure,
   speaking,
   presence,
   onFail,
@@ -49,8 +55,6 @@ export default function CoachFace({
   /** Where AvatarKit mounts its canvas. Must be a sized, non-zero box. */
   containerRef: RefObject<HTMLDivElement | null>;
   status: AvatarStatus;
-  /** Why there's no face. Null when there is one, or when it was switched off. */
-  failure: AvatarFailure | null;
   /** True while the coach is talking, whichever way the audio is coming out. */
   speaking: boolean;
   /** The chip in the top-left: what the coach is doing right now. */
@@ -58,11 +62,6 @@ export default function CoachFace({
   onFail: (reason: "crashed") => void;
 }) {
   const ready = status === "ready";
-  const note = status === "loading" ? AVATAR_LOADING_MESSAGE : (failure?.message ?? null);
-  // The detail names the actual cause. It belongs in front of whoever is
-  // building this and nowhere near a student mid-interview, so it is
-  // development-only; the same text is logged in every environment.
-  const detail = process.env.NODE_ENV === "production" ? null : failure?.detail;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-fill">
@@ -86,19 +85,8 @@ export default function CoachFace({
       {!ready && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
           <Monogram speaking={speaking} />
-          {note && <p className="max-w-sm text-sm leading-relaxed text-ink-2">{note}</p>}
-          {detail && (
-            <div className="max-w-md rounded-xl border border-amber/50 bg-amber/10 px-3 py-2 text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-on-amber">
-                Dev note · avatar fell back ({failure?.code})
-              </p>
-              <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
-                {detail}
-              </p>
-              <p className="mt-1 text-[11px] text-ink-3">
-                Only shown outside production. The same text is in the console.
-              </p>
-            </div>
+          {status === "loading" && (
+            <p className="text-sm text-ink-2">Bringing your coach in…</p>
           )}
         </div>
       )}

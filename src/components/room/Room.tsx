@@ -776,7 +776,6 @@ export default function Room({
         <Stage
           avatarContainerRef={avatarContainerRef}
           avatarStatus={avatar.status}
-          avatarFailure={avatar.failure}
           avatarOn={avatarOn}
           onToggleAvatar={toggleAvatar}
           onAvatarFail={avatar.reportCrash}

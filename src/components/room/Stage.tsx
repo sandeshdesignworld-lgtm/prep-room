@@ -3,7 +3,7 @@
 import type { RefObject } from "react";
 import CoachFace from "./CoachFace";
 import SelfView from "./SelfView";
-import type { AvatarFailure, AvatarStatus } from "@/lib/avatar";
+import type { AvatarStatus } from "@/lib/avatar";
 import type { LiveRead } from "@/lib/signals-math";
 
 /**
@@ -131,7 +131,6 @@ function ControlButton({
 export default function Stage({
   avatarContainerRef,
   avatarStatus,
-  avatarFailure,
   avatarOn,
   onToggleAvatar,
   onAvatarFail,
@@ -154,7 +153,6 @@ export default function Stage({
 }: {
   avatarContainerRef: RefObject<HTMLDivElement | null>;
   avatarStatus: AvatarStatus;
-  avatarFailure: AvatarFailure | null;
   avatarOn: boolean;
   onToggleAvatar: () => void;
   onAvatarFail: (reason: "crashed") => void;
@@ -186,7 +184,6 @@ export default function Stage({
         <CoachFace
           containerRef={avatarContainerRef}
           status={avatarStatus}
-          failure={avatarFailure}
           speaking={coachSpeaking}
           presence={presence}
           onFail={onAvatarFail}

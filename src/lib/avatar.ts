@@ -57,66 +57,41 @@ export type AvatarFailureCode =
 
 export interface AvatarFailure {
   code: AvatarFailureCode;
-  /** Shown to the user. Says what they get, and what to press if they can fix it. */
-  message: string;
-  /** Shown only outside production, and always logged. Says what actually broke. */
+  /**
+   * For the console, and only the console. None of this reaches the page.
+   *
+   * It used to: there was a friendly sentence on the stage and, outside
+   * production, a box under it explaining which environment variable was
+   * missing. Both were written for whoever is building this, and neither
+   * belongs in front of someone about to rehearse a hard conversation. A
+   * student does not need to know what a motion server is, and being told the
+   * avatar failed makes an ordinary voice-only session feel broken when it is
+   * not. The room simply carries on with a monogram; the reason is one line in
+   * the console for us.
+   */
   detail: string;
 }
 
-const FAILURE: Record<AvatarFailureCode, { message: string; detail: string }> = {
-  muted: {
-    message:
-      "Your coach's face needs read-aloud on. Tap the speaker above the transcript and they'll appear.",
-    detail:
-      "Read-aloud is off. The avatar is driven by the coach's own speech audio, so with nothing to speak there is nothing to drive it, and the SDK is deliberately not loaded.",
-  },
-  "no-voice": {
-    message: "Voice only for now. Your coach is here, just without a face.",
-    detail:
-      "Sarvam is not configured, so there is no coach audio to drive the avatar with. Set SARVAM_API_KEY in .env.local and restart the dev server.",
-  },
-  "not-configured": {
-    message: "Voice only for now. Your coach is here, just without a face.",
-    detail:
-      "GET /api/avatar reported the avatar is not set up. Set SPATIUS_APP_ID, SPATIUS_API_KEY and SPATIUS_AVATAR_ID in .env.local and restart the dev server. The server log names which one is missing.",
-  },
-  "config-failed": {
-    message: "Voice only for now. Your coach is here, just without a face.",
-    detail:
-      "GET /api/avatar failed. Either the app can't be reached or the Spatius console rejected the session-token request; the server log has the status.",
-  },
-  "sdk-failed": {
-    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
-    detail:
-      "@spatius/avatarkit failed to import or initialize. Usually the WASM assets: check that next.config.mjs still wraps the config in withAvatarkit and that /_avatarkit/*.wasm returns 200 with content-type application/wasm.",
-  },
-  "assets-failed": {
-    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
-    detail:
-      "The avatar assets failed to download. Check SPATIUS_AVATAR_ID names an avatar this account owns, and that the network allows the Spatius CDN.",
-  },
-  "connect-failed": {
-    message: "Couldn't load your coach's avatar, so this one is voice only. Nothing else changes.",
-    detail:
-      "Connecting to the motion server failed. A rejected session token, an expired one, or no route to api.<region>.spatius.ai.",
-  },
-  timeout: {
-    message: "Your coach took too long to arrive, so this one is voice only.",
-    detail: `Nothing was ready within ${AVATAR_LOAD_TIMEOUT_MS}ms. Usually a slow connection pulling the avatar assets; the network tab will show what was still in flight.`,
-  },
-  runtime: {
-    message: "Lost your coach's picture, so the rest of this is voice only.",
-    detail:
-      "AvatarKit reported an error or dropped its connection after it had started. The code beside this line is the SDK's own.",
-  },
-  crashed: {
-    message: "Your coach's avatar stopped working, so this one is voice only.",
-    detail: "The avatar render tree threw and was removed by the error boundary.",
-  },
+const FAILURE: Record<AvatarFailureCode, string> = {
+  muted:
+    "Read-aloud is off. The avatar is driven by the coach's own speech audio, so with nothing to speak there is nothing to drive it, and the SDK is deliberately not loaded. Turn read-aloud on to see the coach.",
+  "no-voice":
+    "Sarvam is not configured, so there is no coach audio to drive the avatar with. Set SARVAM_API_KEY in .env.local and restart the dev server.",
+  "not-configured":
+    "GET /api/avatar reported the avatar is not set up. Set SPATIUS_APP_ID, SPATIUS_API_KEY and SPATIUS_AVATAR_ID in .env.local and restart the dev server. The server log names which one is missing.",
+  "config-failed":
+    "GET /api/avatar failed. Either the app can't be reached or the Spatius console rejected the session-token request; the server log has the status.",
+  "sdk-failed":
+    "@spatius/avatarkit failed to import or initialize. Usually the WASM assets: check that next.config.mjs still wraps the config in withAvatarkit and that /_avatarkit/*.wasm returns 200 with content-type application/wasm.",
+  "assets-failed":
+    "The avatar assets failed to download. Check SPATIUS_AVATAR_ID names an avatar this account owns, and that the network allows the Spatius CDN.",
+  "connect-failed":
+    "Connecting to the motion server failed. A rejected session token, an expired one, or no route to api.<region>.spatius.ai.",
+  timeout: `Nothing was ready within ${AVATAR_LOAD_TIMEOUT_MS}ms. Usually a slow connection pulling the avatar assets; the network tab will show what was still in flight.`,
+  runtime:
+    "AvatarKit reported an error or dropped its connection after it had started. The code beside this line is the SDK's own.",
+  crashed: "The avatar render tree threw and was removed by the error boundary.",
 };
-
-/** Still spoken while the SDK is on its way. */
-export const AVATAR_LOADING_MESSAGE = "Bringing your coach in…";
 
 /**
  * One place that says it out loud. Every fallback goes through here, so there
@@ -124,11 +99,7 @@ export const AVATAR_LOADING_MESSAGE = "Bringing your coach in…";
  */
 function failureOf(code: AvatarFailureCode, detail?: string): AvatarFailure {
   const base = FAILURE[code];
-  return {
-    code,
-    message: base.message,
-    detail: detail ? `${base.detail}\n  Underlying: ${detail}` : base.detail,
-  };
+  return { code, detail: detail ? `${base}\n  Underlying: ${detail}` : base };
 }
 
 function logFailure(failure: AvatarFailure): void {
