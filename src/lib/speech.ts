@@ -310,6 +310,43 @@ async function streamToAvatar(
   return sent;
 }
 
+/**
+ * Resolves when the promise does, or when the ceiling is reached.
+ *
+ * Every wait in the playback queue is a wait on a browser event, and a browser
+ * event is not a promise anyone owes you. speechSynthesis is known to skip its
+ * `end` callback on long utterances; a stalled decode fires neither `ended` nor
+ * `error`. Either one hangs the queue forever, which leaves the coach marked as
+ * still speaking, which leaves the microphone held, which is the room going
+ * permanently silent. A ceiling turns all of that into a late sentence.
+ */
+function noLongerThan(promise: Promise<void>, ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn("[Prime AI voice] a clip never reported finishing, carrying on without it.");
+      resolve();
+    }, ms);
+    void promise.finally(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * How long a clip is allowed to take, from what it is.
+ *
+ * A flat ceiling had to be generous enough for the longest sentence anyone
+ * might write, which made it useless as a recovery: thirty seconds of silence
+ * per sentence is the app being broken, just on a timer. Speech runs about
+ * fourteen characters a second, so the text says how long it should take, and
+ * anything much past that has stalled.
+ */
+function clipCeilingMs(text: string): number {
+  const spoken = (text.length / 14) * 1000;
+  return Math.min(25000, Math.max(3000, spoken * 1.6 + 2000));
+}
+
 interface Clip {
   text: string;
   controller: AbortController;
@@ -414,17 +451,20 @@ export function useSpeaker({
   /** Last resort for one sentence, so a failed clip doesn't silently vanish. */
   const speakInBrowser = useCallback(
     (text: string) =>
-      new Promise<void>((resolve) => {
-        if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang;
-        const voice = pickVoice(lang);
-        if (voice) utterance.voice = voice;
-        utterance.rate = 1.02;
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        window.speechSynthesis.speak(utterance);
-      }),
+      noLongerThan(
+        new Promise<void>((resolve) => {
+          if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = lang;
+          const voice = pickVoice(lang);
+          if (voice) utterance.voice = voice;
+          utterance.rate = 1.02;
+          utterance.onend = () => resolve();
+          utterance.onerror = () => resolve();
+          window.speechSynthesis.speak(utterance);
+        }),
+        clipCeilingMs(text)
+      ),
     [lang]
   );
 
@@ -441,10 +481,18 @@ export function useSpeaker({
       audioRef.current = audio;
       try {
         await audio.play();
-        await new Promise<void>((resolve) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-        });
+        // The element knows its own length once it has metadata, which is a
+        // far better ceiling than a guess from the text. Falls back to the
+        // guess when it does not.
+        await noLongerThan(
+          new Promise<void>((resolve) => {
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+          }),
+          Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration * 1000 + 3000
+            : clipCeilingMs(clip.text)
+        );
       } catch {
         // Autoplay refused, or a decode error. Say it the plain way instead.
         await speakInBrowser(clip.text);

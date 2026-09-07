@@ -30,6 +30,35 @@ const COUNTDOWN_TICK_MS = 100;
 const NOISE_SETTLE_MS = 4000;
 
 /**
+ * How long after the coach stops before the microphone is handed back.
+ *
+ * A reply is spoken sentence by sentence, and the gap between two of them can
+ * read as the coach having finished. Reopening the microphone into that gap
+ * puts it live for the next sentence, which is the loop this is here to break.
+ * Long enough to cover a breath, short enough not to clip the user's reply.
+ */
+const RESUME_AFTER_COACH_MS = 600;
+
+/**
+ * How long after the coach stops that recognition results are still treated as
+ * the coach's own voice. Recognition reports words after it hears them, so the
+ * tail of what it picked up arrives once the room has already gone quiet.
+ */
+const COACH_ECHO_GRACE_MS = 500;
+
+/**
+ * The longest the coach may hold the microphone, whatever it believes about
+ * itself.
+ *
+ * The last backstop. Holding the mic is correct while the coach is speaking and
+ * catastrophic if it is wrong, because a coach that is stuck marked as speaking
+ * takes the room with it: the user talks, nothing listens, nothing sends, and
+ * the app is over. Longer than any reply this writes, so it costs nothing when
+ * everything is working.
+ */
+const MAX_MIC_HOLD_MS = 45000;
+
+/**
  * How the microphone behaves.
  *
  * "auto" is hands-free: it picks up when you start talking and sends when you
@@ -119,8 +148,41 @@ export function useVoiceLoop({
     onInterruptRef.current = onInterrupt;
   });
 
+  /**
+   * Whether the coach is talking, readable from the recognition callbacks,
+   * which outlive the render they were created in.
+   */
+  const coachHoldsMicRef = useRef(false);
+  const coachStoppedAtRef = useRef(0);
+
+  /**
+   * True when anything recognition reports right now is the coach rather than
+   * the user.
+   *
+   * Stopping the recogniser while the coach talks is the main defence, and this
+   * is the one behind it. Stopping is not instantaneous, a result already in
+   * flight still arrives, and recognition reports words a moment after it hears
+   * them, so the tail of a sentence lands after the room has gone quiet. Any of
+   * those is enough to close the loop: the coach's own words become a user
+   * turn, the turn sends, and the coach answers itself.
+   *
+   * So nothing recognition produces while the coach is speaking, or in the
+   * moment after, is allowed to count. It costs the first fraction of a second
+   * of a barge-in, which is worth it.
+   */
+  const isCoachEcho = useCallback(
+    () =>
+      coachHoldsMicRef.current ||
+      performance.now() - coachStoppedAtRef.current < COACH_ECHO_GRACE_MS,
+    []
+  );
+
   const dictation = useDictation({
     onFinal: (text) => {
+      if (isCoachEcho()) {
+        console.info("[Prime AI voice] ignored what the coach said coming back through the mic.");
+        return;
+      }
       heardAtRef.current = performance.now();
       onDictatedRef.current(text);
     },
@@ -160,6 +222,12 @@ export function useVoiceLoop({
   );
 
   useEffect(() => {
+    // Same rule for the in-flight guess: it is the coach's voice too, and
+    // letting it through would show the coach's words in the user's own box.
+    if (isCoachEcho()) {
+      interimRef.current = "";
+      return;
+    }
     interimRef.current = interim;
     if (!interim) return;
     heardAtRef.current = performance.now();
@@ -168,7 +236,7 @@ export function useVoiceLoop({
     // meter being absent: a meter that is running but never crosses its
     // threshold is exactly the case where this is the only thing that fires.
     onInterruptRef.current();
-  }, [interim]);
+  }, [interim, isCoachEcho]);
 
   /* ------------------- while the coach is talking, don't listen ------------ */
 
@@ -187,21 +255,82 @@ export function useVoiceLoop({
    * cancellation and is a different stream, so talking over the coach still
    * stops it and hands the microphone straight back.
    */
-  const wasHeldRef = useRef(false);
+  /**
+   * The user switched the microphone off themselves, so nothing may switch it
+   * back on. Cleared when they start it again, or when a turn goes: sending is
+   * the end of a turn, not a decision to stop talking.
+   */
+  const userStoppedRef = useRef(false);
+  /**
+   * The user has used the microphone at least once this session.
+   *
+   * Nothing opens the microphone until they have. Handing it back after the
+   * coach has spoken is right; opening it the moment someone walks into the
+   * room, before they have asked for it, is not. Recognition sends audio to the
+   * browser's own servers, which the trust screen is explicit about, and the
+   * app does not get to start that on their behalf.
+   */
+  const hasListenedRef = useRef(false);
+  const [heldTooLong, setHeldTooLong] = useState(false);
+
+  // The backstop, watching the hold rather than the coach. If the coach has
+  // been "speaking" for longer than any reply could be, something upstream is
+  // stuck, and the microphone is more useful to the user than to it.
   useEffect(() => {
-    if (coachSpeaking && listening) {
-      wasHeldRef.current = true;
+    if (!coachSpeaking) return;
+    const id = window.setTimeout(() => {
+      console.warn(
+        "[Prime AI voice] the coach has been marked as speaking for too long, taking the mic back."
+      );
+      setHeldTooLong(true);
+    }, MAX_MIC_HOLD_MS);
+    // Clearing the flag on the way out, rather than on the way in, keeps this
+    // to one state write per hold instead of one per render.
+    return () => {
+      window.clearTimeout(id);
+      setHeldTooLong(false);
+    };
+  }, [coachSpeaking]);
+
+  const coachHoldsMic = coachSpeaking && !heldTooLong;
+  useEffect(() => {
+    coachHoldsMicRef.current = coachHoldsMic;
+    if (!coachHoldsMic) coachStoppedAtRef.current = performance.now();
+  }, [coachHoldsMic]);
+
+  useEffect(() => {
+    if (coachHoldsMic && listening) {
       stop();
       return;
     }
-    // Back to the user's turn. Only resume what we ourselves interrupted, and
-    // only in the hands-free mode: tap to talk means the mic starts when the
-    // user says it starts.
-    if (!coachSpeaking && wasHeldRef.current) {
-      wasHeldRef.current = false;
-      if (mode === "auto" && micOn && supported) start();
+    // Back to the user's turn, after a pause. Not instantly: a reply is spoken
+    // sentence by sentence and the gap between two of them looks exactly like
+    // the end of one, so reopening on the first quiet moment puts the mic live
+    // for the next sentence. The timer is cleared if the coach starts again,
+    // which is what makes a gap a gap rather than an ending.
+    // The coach has finished, so the microphone goes back.
+    //
+    // Deliberately not conditional on us having taken it. Auto-send stops the
+    // recogniser itself, to take the tail of a sentence cleanly, so by the time
+    // the coach starts talking we are usually not listening and never "held"
+    // anything. Resuming only what we held meant the microphone was never
+    // handed back at all, and the room went quiet for good.
+    //
+    // The only thing that blocks it is the user having switched the mic off,
+    // which is a decision, not a side effect.
+    if (
+      !coachHoldsMic &&
+      !listening &&
+      mode === "auto" &&
+      micOn &&
+      supported &&
+      hasListenedRef.current &&
+      !userStoppedRef.current
+    ) {
+      const id = window.setTimeout(start, RESUME_AFTER_COACH_MS);
+      return () => window.clearTimeout(id);
     }
-  }, [coachSpeaking, listening, mode, micOn, supported, start, stop]);
+  }, [coachHoldsMic, listening, mode, micOn, supported, start, stop]);
 
   /* --------------------------- barge-in and pickup ------------------------- */
 
@@ -209,16 +338,16 @@ export function useVoiceLoop({
     if (!mic.speaking) return;
     // Talking over the coach stops the coach. Nothing else interrupts it: the
     // reply stays on screen, it just stops being read out over the user.
-    if (coachSpeaking) {
-      onInterruptRef.current();
-      wasHeldRef.current = true;
-    }
+    if (coachHoldsMic) onInterruptRef.current();
     // And someone who has already started talking shouldn't have to find a
     // button first. Without this the loop only runs once: auto-send stops the
     // recogniser to take the tail cleanly, and the next turn would need a tap.
     // Hands-free only: tap to talk exists precisely so nothing picks itself up.
-    if (mode === "auto" && micOn && supported && !listening && !coachSpeaking) start();
-  }, [mic.speaking, coachSpeaking, mode, micOn, supported, listening, start]);
+    if (mode === "auto" && micOn && supported && !listening && !coachHoldsMic) {
+      hasListenedRef.current = true;
+      start();
+    }
+  }, [mic.speaking, coachHoldsMic, mode, micOn, supported, listening, start]);
 
   /* ----------------------------- a loud room ------------------------------- */
 
@@ -248,6 +377,9 @@ export function useVoiceLoop({
     // Stop first: the tail is already folded into `text`, and leaving the
     // recogniser running would append the coach's reply to the next turn.
     stop();
+    // Ending a turn is not a decision to stop talking, so the mic is free to
+    // come back once the coach has answered.
+    userStoppedRef.current = false;
     interimRef.current = "";
     onSendRef.current(text);
   }, [stop]);
@@ -259,7 +391,7 @@ export function useVoiceLoop({
     autoSend &&
     listening &&
     !busy &&
-    !coachSpeaking &&
+    !coachHoldsMic &&
     (hasDraft || interim.trim().length > 0);
 
   useEffect(() => {
@@ -294,10 +426,13 @@ export function useVoiceLoop({
 
   const toggle = useCallback(() => {
     if (listening) {
+      userStoppedRef.current = true;
       stop();
       setCountdownMs(null);
       return;
     }
+    userStoppedRef.current = false;
+    hasListenedRef.current = true;
     // Nobody wants to be transcribed over the coach's own voice.
     onInterruptRef.current();
     declinedAtRef.current = 0;
@@ -315,7 +450,7 @@ export function useVoiceLoop({
     countdownMs,
     cancelPending,
     levelAvailable,
-    heldForCoach: coachSpeaking && !listening,
+    heldForCoach: coachHoldsMic && !listening,
     noisyRoom,
   };
 }
