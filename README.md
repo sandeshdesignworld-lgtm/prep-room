@@ -119,6 +119,27 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **Smiling, as a fourth signal.** A Smile pill alongside eye contact, posture
+  and steadiness, on the same debounced gate and the same low bar: it is about
+  being present, not a demand to grin through a hard question. The debrief also
+  gets it, and gets a second number with it. `cheekSquint` and `eyeSquint`
+  alongside the mouth corners are the Duchenne markers, so `smileWarmth()`
+  reports how much of the face joined in with the mouth. That is the closest
+  this can get to telling a warm smile from a courtesy one, and the analysis
+  prompt is explicit that it is still a ratio between blendshape scores: say
+  which muscles moved and when it changed, never whether they meant it, and
+  never call a low score a fake smile.
+- **One audio stream.** Sarvam returns linear16 at 24kHz, which is exactly what
+  the motion server takes, so the coach's voice reaches the avatar without
+  being decoded or resampled anywhere. Chunks are forwarded as they arrive
+  (usable audio at ~420ms rather than ~1300ms plus a decode) and
+  `frameStarvationMode` is `strictSync`, so the mouth can never walk away from
+  the voice.
+- **The live page shows no coach text.** You listen and answer; you don't read
+  along. The whole conversation is saved as before and is readable in History,
+  including the rehearsal and the debrief. A coach that cannot speak (read-aloud
+  off, or no speech support) gets its text back, because otherwise nothing
+  happens in the room.
 - **Crisp White is the default, everywhere.** The palette no longer has a
   `prefers-color-scheme` rule; a laptop set to dark still opens the app light.
   Dark is opt-in through one switch (the rail, and Your data), stored per

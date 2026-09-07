@@ -15,6 +15,7 @@ const ROWS = [
   { key: "facing", label: "Facing you", hint: "Head pointed at the camera" },
   { key: "stillness", label: "Stillness", hint: "How little the head moved" },
   { key: "openness", label: "Open posture", hint: "Shoulders squared, against your own baseline" },
+  { key: "smile", label: "Smiling", hint: "Mouth corners. A proxy for the shape of a smile, not for meaning it" },
 ] as const;
 
 const W = 600;
@@ -23,6 +24,7 @@ const H = 40;
 function valueOf(s: SignalSample, key: (typeof ROWS)[number]["key"]): number {
   if (key === "facing") return s.facing;
   if (key === "stillness") return 1 - s.fidget;
+  if (key === "smile") return s.smile;
   return s.openness;
 }
 

@@ -4,6 +4,7 @@ import {
   downsample, rollupByTurn, summariseSignals,
   readCandidates, newGate, gateStatus, STATUS_HOLD_MS, FIDGET_NOMINAL_MS,
   turnArcs, detailSignals, MAX_TRACK_ROWS,
+  smileWarmth, SMILE_PRESENT, SMILE_GOOD_MIN,
 } from "../.test-build/signals-math.js";
 
 let pass=0, fail=0;
@@ -159,17 +160,46 @@ const steadyGate = newGate("good");
 ok("an unchanged gate is returned by identity",
   gateStatus(steadyGate, "good", 500) === steadyGate);
 
+console.log("--- smiling ---");
+ok("blendshape pairs are averaged",
+  faceSignals({ cheekSquintLeft: 0.4, cheekSquintRight: 0.6, eyeSquintLeft: 0.2, eyeSquintRight: 0.4 }).cheek === 0.5);
+ok("missing cheek and eye keys read as zero, not undefined",
+  faceSignals({}).cheek === 0 && faceSignals({}).eyeSquint === 0);
+
+// A still face is not a fake smile: with no smile there is nothing to qualify.
+ok("no smile, no warmth score",
+  smileWarmth({ smile: 0, cheek: 0.9, eyeSquint: 0.9 }) === 0);
+ok("a smile below the floor is not a smile",
+  smileWarmth({ smile: SMILE_PRESENT / 2, cheek: 0.5, eyeSquint: 0.5 }) === 0);
+// The eyes joining in fully reads as full warmth; the mouth alone reads as none.
+near("eyes fully in", smileWarmth({ smile: 0.6, cheek: 0.6, eyeSquint: 0.6 }), 1, 1e-9);
+near("mouth only", smileWarmth({ smile: 0.6, cheek: 0, eyeSquint: 0 }), 0, 1e-9);
+near("half in", smileWarmth({ smile: 0.6, cheek: 0.3, eyeSquint: 0.3 }), 0.5, 1e-9);
+ok("never exceeds one", smileWarmth({ smile: 0.2, cheek: 1, eyeSquint: 1 }) <= 1);
+ok("old samples with no cheek data don't throw",
+  smileWarmth({ smile: 0.5 }) === 0);
+
+console.log("--- the smile pill ---");
+const win = { eyeContactRatio: 1, openness: 1, fidget: 0 };
+ok("a smile above the floor holds",
+  readCandidates({ ...win, smile: SMILE_GOOD_MIN + 0.05 }).smile === "good");
+ok("a flat face asks for a look, it does not nag",
+  readCandidates({ ...win, smile: 0 }).smile === "attention");
+ok("the bar is low on purpose", SMILE_GOOD_MIN <= 0.2);
+
 console.log("--- turn arcs ---");
 // One turn that starts facing the camera and ends off it, and a second that
 // never moves. Nine samples so each third is three.
 const drift = [];
 for (let i = 0; i < 9; i++) drift.push({
   t: i * 100, turn: 0, facing: i < 3 ? 1 : i < 6 ? 0.5 : 0,
-  smile: 0, brow: 0, gazeDown: 0, jawOpen: 0, openness: 0.8, tilt: 0, fidget: 0.1,
+  smile: 0.3, cheek: 0.3, eyeSquint: 0.3, brow: 0, gazeDown: 0, jawOpen: 0,
+  openness: 0.8, tilt: 0, fidget: 0.1,
 });
 for (let i = 0; i < 9; i++) drift.push({
   t: 900 + i * 100, turn: 1, facing: 1,
-  smile: 0.2, brow: 0, gazeDown: 0, jawOpen: 0, openness: 0.8, tilt: 0, fidget: 0.1,
+  smile: 0.2, cheek: 0, eyeSquint: 0, brow: 0, gazeDown: 0, jawOpen: 0,
+  openness: 0.8, tilt: 0, fidget: 0.1,
 });
 const arcs = turnArcs(drift);
 ok("one arc per turn", arcs.length === 2);
@@ -189,6 +219,11 @@ ok("nothing from no samples", detailSignals([], []) === "");
 const detail = detailSignals(drift, ["I built a parser", "Around eight lakh"]);
 ok("names the proxies, not the conclusions", /PROXY/.test(detail));
 ok("says what it cannot see", /does not track pupils/.test(detail));
+ok("explains the smile pair honestly", /eyes joining in/.test(detail));
+ok("and forbids calling one fake", /never call a low score a fake smile/i.test(detail));
+// Turn 1's eyes join in, turn 2's smile is mouth only.
+ok("warmth is read per turn",
+  arcs[0].whole.warmth === 1 && arcs[1].whole.warmth === 0);
 ok("shows the arc inside a turn", detail.includes("100% → 0%"));
 ok("quotes what was being said", detail.includes("I built a parser"));
 ok("too short for a track, so it doesn't fake one",

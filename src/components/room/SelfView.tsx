@@ -26,16 +26,17 @@ const PILL_LABEL = {
   eyeContact: "Eye contact",
   posture: "Open posture",
   steady: "Steady",
+  smile: "Smile",
 } as const;
 
-const PILL_ORDER = ["eyeContact", "posture", "steady"] as const;
+const PILL_ORDER = ["eyeContact", "posture", "steady", "smile"] as const;
 
 function Pill({ label, status }: { label: string; status: SignalStatus }) {
   return (
     <span
       className="flex items-center gap-1.5 rounded-full bg-card/92 px-2.5 py-1 text-xs font-medium text-ink shadow-sm backdrop-blur-sm"
       // Screen readers get the state in words; the dot alone would be colour-only.
-      aria-label={`${label}: ${status === "good" ? "steady" : "worth a look"}`}
+      aria-label={`${label}: ${status === "good" ? "holding" : "worth a look"}`}
     >
       <span
         aria-hidden

@@ -14,6 +14,12 @@ import type { LiveRead, SignalStatus } from "@/lib/signals-math";
  *
  * There is no "pace" card, and there won't be one until something actually
  * measures pace. A card that can't be earned is a fake signal.
+ *
+ * Smile is the one to be most careful with. "Attention" here means the mouth
+ * has gone still, not that the user should be smiling: there are plenty of
+ * moments in a hard conversation where a flat face is the right face. It sits
+ * at the same weight as the others and says the same amount, which is very
+ * little, on purpose.
  */
 
 const CARDS = [
@@ -34,6 +40,12 @@ const CARDS = [
     label: "Steadiness",
     good: "Settled",
     attention: "Lots of movement",
+  },
+  {
+    key: "smile" as const,
+    label: "Smile",
+    good: "Some warmth",
+    attention: "Face has gone flat",
   },
 ];
 

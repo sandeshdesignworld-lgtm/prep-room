@@ -19,6 +19,14 @@ export interface Sample {
   brow: number;
   gazeDown: number;
   jawOpen: number;
+  /**
+   * Cheek raise and eye narrowing, averaged over each pair. Together with
+   * `smile` these are the Duchenne markers: a smile the eyes join in with
+   * involves the cheeks and narrows the eyes, a courtesy smile is mostly mouth.
+   * Optional because sessions recorded before this existed have neither.
+   */
+  cheek?: number;
+  eyeSquint?: number;
   /** Shoulder width against this person's own baseline, 0-1. */
   openness: number;
   /** Shoulder line angle in degrees; positive is one shoulder dropped. */
@@ -98,6 +106,8 @@ export interface FaceSignals {
   brow: number;
   gazeDown: number;
   jawOpen: number;
+  cheek: number;
+  eyeSquint: number;
 }
 
 /** Averages the paired blendshapes named in the brief. Missing keys read as 0. */
@@ -109,8 +119,42 @@ export function faceSignals(scores: Record<string, number>): FaceSignals {
     brow: avg("browDownLeft", "browDownRight"),
     gazeDown: avg("eyeLookDownLeft", "eyeLookDownRight"),
     jawOpen: get("jawOpen"),
+    cheek: avg("cheekSquintLeft", "cheekSquintRight"),
+    eyeSquint: avg("eyeSquintLeft", "eyeSquintRight"),
   };
 }
+
+/* --------------------------------- smiling -------------------------------- */
+
+/**
+ * How much the rest of the face is joining in with the mouth, 0-1.
+ *
+ * A smile the eyes take part in raises the cheeks and narrows the eyes; a
+ * courtesy smile is mostly mouth. That difference is real and it is visible,
+ * and it is ALSO the single easiest thing in this whole app to overclaim. This
+ * is a ratio between blendshape scores from a webcam. It is not a reading of
+ * whether someone meant it, and nothing downstream may present it as one: the
+ * honest phrasing is "your eyes joined in", never "you were genuinely happy".
+ *
+ * Returns 0 when there is no smile to qualify, so a still face does not read as
+ * a fake one.
+ */
+export function smileWarmth(s: Pick<Sample, "smile" | "cheek" | "eyeSquint">): number {
+  if (s.smile < SMILE_PRESENT) return 0;
+  const eyes = ((s.cheek ?? 0) + (s.eyeSquint ?? 0)) / 2;
+  return clamp01(eyes / Math.max(s.smile, SMILE_PRESENT));
+}
+
+/** Below this the mouth isn't doing anything worth calling a smile. */
+export const SMILE_PRESENT = 0.08;
+/**
+ * Smiling enough of the recent window to read as warm rather than blank.
+ * Deliberately low: this is a pill about being present, not a demand to grin
+ * through a hard question, and it must never nag.
+ */
+export const SMILE_GOOD_MIN = 0.12;
+/** Warmth at or above this counts as the eyes joining in. */
+export const WARMTH_GENUINE = 0.5;
 
 /* -------------------------------- posture -------------------------------- */
 
@@ -193,6 +237,8 @@ export interface LiveRead {
   posture: SignalStatus;
   /** Head movement low enough to read as settled. */
   steady: SignalStatus;
+  /** Mouth doing something over the recent window. Never a demand to grin. */
+  smile: SignalStatus;
 }
 
 /** Share of the recent window spent facing the camera that still reads as engaged. */
@@ -221,6 +267,8 @@ export interface SignalWindow {
   openness: number;
   /** Smoothed head movement, 0-1. */
   fidget: number;
+  /** Smoothed mouth-corner score, 0-1. */
+  smile: number;
 }
 
 /** The status each signal would have right now, before any debouncing. */
@@ -229,6 +277,7 @@ export function readCandidates(w: SignalWindow): LiveRead {
     eyeContact: w.eyeContactRatio > EYE_CONTACT_GOOD_RATIO ? "good" : "attention",
     posture: w.openness >= POSTURE_GOOD_MIN ? "good" : "attention",
     steady: w.fidget <= STEADY_MAX ? "good" : "attention",
+    smile: w.smile >= SMILE_GOOD_MIN ? "good" : "attention",
   };
 }
 
@@ -302,6 +351,8 @@ export function downsample(samples: Sample[], bucketMs = 1000): Sample[] {
       brow: mean(group.map((g) => g.brow)),
       gazeDown: mean(group.map((g) => g.gazeDown)),
       jawOpen: mean(group.map((g) => g.jawOpen)),
+      cheek: mean(group.map((g) => g.cheek ?? 0)),
+      eyeSquint: mean(group.map((g) => g.eyeSquint ?? 0)),
       openness: mean(group.map((g) => g.openness)),
       tilt: mean(group.map((g) => g.tilt)),
       fidget: mean(group.map((g) => g.fidget)),
@@ -315,6 +366,8 @@ export interface TurnRollup {
   fidget: number;
   openness: number;
   smile: number;
+  /** How much the eyes and cheeks joined the mouth, 0-1. A proxy, not a verdict. */
+  warmth: number;
   brow: number;
   gazeDown: number;
 }
@@ -336,6 +389,7 @@ export function rollupByTurn(samples: Sample[]): TurnRollup[] {
       fidget: mean(group.map((g) => g.fidget)),
       openness: mean(group.map((g) => g.openness)),
       smile: mean(group.map((g) => g.smile)),
+      warmth: mean(group.map(smileWarmth)),
       brow: mean(group.map((g) => g.brow)),
       gazeDown: mean(group.map((g) => g.gazeDown)),
     }));
@@ -358,6 +412,7 @@ export function summariseSignals(samples: Sample[], turnLabels: string[]): strin
     fidget: mean(samples.map((s) => s.fidget)),
     openness: mean(samples.map((s) => s.openness)),
     smile: mean(samples.map((s) => s.smile)),
+    warmth: mean(samples.map(smileWarmth)),
     brow: mean(samples.map((s) => s.brow)),
     gazeDown: mean(samples.map((s) => s.gazeDown)),
   };
@@ -365,7 +420,7 @@ export function summariseSignals(samples: Sample[], turnLabels: string[]): strin
   const lines = [
     "Delivery signals, measured in the browser from the camera. Physical only, these are positions and movement, not emotions, and they carry no interpretation.",
     "",
-    `Whole session: facing the camera ${pct(overall.facing)} of the time, head movement ${pct(overall.fidget)}, open posture ${pct(overall.openness)}, smiling ${pct(overall.smile)}, brow drawn down ${pct(overall.brow)}, eyes cast down ${pct(overall.gazeDown)}.`,
+    `Whole session: facing the camera ${pct(overall.facing)} of the time, head movement ${pct(overall.fidget)}, open posture ${pct(overall.openness)}, smiling ${pct(overall.smile)} (eyes and cheeks joining in ${pct(overall.warmth)} of that), brow drawn down ${pct(overall.brow)}, eyes cast down ${pct(overall.gazeDown)}.`,
     "",
     "Per turn (the user's turns, in order):",
   ];
@@ -374,7 +429,7 @@ export function summariseSignals(samples: Sample[], turnLabels: string[]): strin
     const label = turnLabels[t.turn];
     const quoted = label ? `, they said: "${truncate(label, 90)}"` : "";
     lines.push(
-      `Turn ${t.turn + 1} (${t.seconds}s): facing ${pct(t.facing)}, movement ${pct(t.fidget)}, open posture ${pct(t.openness)}, smiling ${pct(t.smile)}, brow down ${pct(t.brow)}, eyes down ${pct(t.gazeDown)}${quoted}`
+      `Turn ${t.turn + 1} (${t.seconds}s): facing ${pct(t.facing)}, movement ${pct(t.fidget)}, open posture ${pct(t.openness)}, smiling ${pct(t.smile)} (eyes joining in ${pct(t.warmth)}), brow down ${pct(t.brow)}, eyes down ${pct(t.gazeDown)}${quoted}`
     );
   }
 
@@ -391,6 +446,7 @@ function largestShift(turns: TurnRollup[]): string | null {
     { key: "facing" as const, label: "facing the camera" },
     { key: "fidget" as const, label: "head movement" },
     { key: "openness" as const, label: "open posture" },
+    { key: "smile" as const, label: "smiling" },
   ];
 
   let best: { label: string; from: number; to: number; turn: number; delta: number } | null = null;
@@ -430,6 +486,7 @@ export interface Means {
   fidget: number;
   openness: number;
   smile: number;
+  warmth: number;
   brow: number;
   gazeDown: number;
 }
@@ -440,6 +497,7 @@ function meansOf(group: Sample[]): Means {
     fidget: mean(group.map((g) => g.fidget)),
     openness: mean(group.map((g) => g.openness)),
     smile: mean(group.map((g) => g.smile)),
+    warmth: mean(group.map(smileWarmth)),
     brow: mean(group.map((g) => g.brow)),
     gazeDown: mean(group.map((g) => g.gazeDown)),
   };
@@ -517,9 +575,11 @@ export function detailSignals(samples: Sample[], turnLabels: string[]): string {
     "- facing: the share of frames where the head was pointed within about 18 degrees of the camera horizontally and 14 vertically. This is a PROXY for eye contact. It does not track pupils, so reading from a second screen straight ahead still counts as facing, and a webcam above the screen means looking at the other person's face reads as slightly down.",
     "- movement: how far the nose travelled between frames, scaled to 0-100%. A PROXY for fidgeting. Leaning in, nodding and talking with the head all raise it.",
     "- open posture: the width between the shoulders measured against this person's own first two and a half seconds. Turning side-on or hunching lowers it; so does simply sitting further back.",
-    "- smiling, brow down, eyes down: face blendshape scores. PROXIES for the expression, nothing more. They cannot tell a warm smile from a nervous one, or concentration from a frown.",
+    "- smiling: the mouth-corner blendshapes. A PROXY for the shape of the mouth, nothing more.",
+    "- eyes joining in: how much the cheeks raised and the eyes narrowed alongside the mouth, as a share of the smile itself. A smile the whole face takes part in scores high; one that is mostly mouth scores low. This is the closest thing here to telling a warm smile from a courtesy one, and it is STILL only a ratio between blendshape scores off a webcam. Say what the face did. Never say whether they meant it, and never call a low score a fake smile.",
+    "- brow down, eyes down: face blendshape scores. PROXIES for the expression, nothing more. They cannot tell concentration from a frown.",
     "",
-    `Whole session (${seconds}s of camera across ${arcs.length} ${arcs.length === 1 ? "turn" : "turns"}): facing ${pct(overall.facing)}, movement ${pct(overall.fidget)}, open posture ${pct(overall.openness)}, smiling ${pct(overall.smile)}, brow down ${pct(overall.brow)}, eyes down ${pct(overall.gazeDown)}.`,
+    `Whole session (${seconds}s of camera across ${arcs.length} ${arcs.length === 1 ? "turn" : "turns"}): facing ${pct(overall.facing)}, movement ${pct(overall.fidget)}, open posture ${pct(overall.openness)}, smiling ${pct(overall.smile)}, eyes joining in ${pct(overall.warmth)}, brow down ${pct(overall.brow)}, eyes down ${pct(overall.gazeDown)}.`,
     "",
     "Per turn. Each pair is the first third of that turn, then the last third, so you can see which way it moved while they were speaking:",
   ];
@@ -528,7 +588,7 @@ export function detailSignals(samples: Sample[], turnLabels: string[]): string {
     const label = turnLabels[a.turn];
     const quoted = label ? ` They said: "${truncate(label, 120)}"` : "";
     lines.push(
-      `Turn ${a.turn + 1} (${a.seconds}s): facing ${arrow(a.open.facing, a.close.facing)}, movement ${arrow(a.open.fidget, a.close.fidget)}, open posture ${arrow(a.open.openness, a.close.openness)}, smiling ${arrow(a.open.smile, a.close.smile)}, eyes down ${arrow(a.open.gazeDown, a.close.gazeDown)}.${quoted}`
+      `Turn ${a.turn + 1} (${a.seconds}s): facing ${arrow(a.open.facing, a.close.facing)}, movement ${arrow(a.open.fidget, a.close.fidget)}, open posture ${arrow(a.open.openness, a.close.openness)}, smiling ${arrow(a.open.smile, a.close.smile)}, eyes joining in ${arrow(a.open.warmth, a.close.warmth)}, eyes down ${arrow(a.open.gazeDown, a.close.gazeDown)}.${quoted}`
     );
   }
 

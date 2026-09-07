@@ -114,10 +114,11 @@ interface Gates {
   eyeContact: StatusGate;
   posture: StatusGate;
   steady: StatusGate;
+  smile: StatusGate;
 }
 
 function freshGates(): Gates {
-  return { eyeContact: newGate(), posture: newGate(), steady: newGate() };
+  return { eyeContact: newGate(), posture: newGate(), steady: newGate(), smile: newGate() };
 }
 
 async function createLandmarkers(): Promise<Landmarkers> {
@@ -187,6 +188,7 @@ export function useSignalCapture() {
   const facingWindowRef = useRef<number[]>([]);
   const opennessWindowRef = useRef<number[]>([]);
   const fidgetWindowRef = useRef<number[]>([]);
+  const smileWindowRef = useRef<number[]>([]);
   const gatesRef = useRef<Gates>(freshGates());
   /** Has the first read reached React yet? A ref, so the loop never closes over
    *  a stale `read` and re-publishes an identical object at 15Hz. */
@@ -282,6 +284,7 @@ export function useSignalCapture() {
     facingWindowRef.current = [];
     opennessWindowRef.current = [];
     fidgetWindowRef.current = [];
+    smileWindowRef.current = [];
     gatesRef.current = freshGates();
     publishedRef.current = false;
     setRead(null);
@@ -330,7 +333,7 @@ export function useSignalCapture() {
       lastStampRef.current = stamp;
 
       let facing = 0;
-      let face = { smile: 0, brow: 0, gazeDown: 0, jawOpen: 0 };
+      let face = { smile: 0, brow: 0, gazeDown: 0, jawOpen: 0, cheek: 0, eyeSquint: 0 };
       // Pose only runs on alternate ticks, so the ticks in between carry the
       // last real reading forward rather than writing a zero into the timeline.
       let { openness: open, tilt, fidget: movement } = lastPoseRef.current;
@@ -389,6 +392,7 @@ export function useSignalCapture() {
       };
       samplesRef.current.push(sample);
       push(facingWindowRef.current, facing, FACE_WINDOW);
+      push(smileWindowRef.current, face.smile, FACE_WINDOW);
 
       // ---- the live read, debounced so the pills can't strobe ----
       if (t >= WARMUP_MS) {
@@ -396,12 +400,14 @@ export function useSignalCapture() {
           eyeContactRatio: mean(facingWindowRef.current),
           openness: mean(opennessWindowRef.current),
           fidget: mean(fidgetWindowRef.current),
+          smile: mean(smileWindowRef.current),
         });
         const prev = gatesRef.current;
         const next: Gates = {
           eyeContact: gateStatus(prev.eyeContact, candidates.eyeContact, now),
           posture: gateStatus(prev.posture, candidates.posture, now),
           steady: gateStatus(prev.steady, candidates.steady, now),
+          smile: gateStatus(prev.smile, candidates.smile, now),
         };
         // Every gate hands back its previous object when nothing moved, so this
         // re-renders on a real change and stays silent the rest of the time,
@@ -409,7 +415,8 @@ export function useSignalCapture() {
         const moved =
           next.eyeContact !== prev.eyeContact ||
           next.posture !== prev.posture ||
-          next.steady !== prev.steady;
+          next.steady !== prev.steady ||
+          next.smile !== prev.smile;
         if (moved || !publishedRef.current) {
           gatesRef.current = next;
           publishedRef.current = true;
@@ -417,6 +424,7 @@ export function useSignalCapture() {
             eyeContact: next.eyeContact.status,
             posture: next.posture.status,
             steady: next.steady.status,
+            smile: next.smile.status,
           });
         }
       }
