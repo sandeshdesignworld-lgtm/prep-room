@@ -43,6 +43,21 @@ export default function SessionTranscript({ session }: { session: Session }) {
         </div>
       )}
 
+      {(session.cues?.length ?? 0) > 0 && (
+        <div className="rounded-xl border bg-fill-2 hairline px-3.5 py-3">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-2">
+            Cue points from this session
+          </h4>
+          <ul className="mt-2 space-y-1.5">
+            {session.cues?.map((cue) => (
+              <li key={cue.id} className="text-sm leading-relaxed text-ink">
+                {cue.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {session.debrief && (
         <DebriefCard
           debrief={session.debrief}

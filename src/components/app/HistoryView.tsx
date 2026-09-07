@@ -82,6 +82,11 @@ export default function HistoryView({
                   <span className="mt-1 block truncate text-sm font-medium text-ink">
                     {session.title}
                   </span>
+                  {(session.cues?.length ?? 0) > 0 && (
+                    <span className="mt-1 block text-xs text-ink-2">
+                      {session.cues?.length} cue{session.cues?.length === 1 ? "" : "s"} kept
+                    </span>
+                  )}
                   {session.debrief && (
                     <span className="mt-1 block text-xs text-ink-2">
                       Practised · {session.debrief.verdict}

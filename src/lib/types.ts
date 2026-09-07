@@ -101,6 +101,28 @@ export interface Session {
   updatedAt: string;
   roleplay?: Roleplay;
   debrief?: Debrief;
+  /**
+   * The running list beside the room, kept for the whole session rather than
+   * cleared each turn. Optional because sessions saved before it existed have
+   * none.
+   */
+  cues?: CuePoint[];
+}
+
+/**
+ * One thing worth remembering, pulled out of what the coach just said.
+ *
+ * The room speaks rather than types, which means the advice arrives once and
+ * then it is gone. These are what is left on screen afterwards: the two or
+ * three moves from that exchange, in the coach's own words, stacking up as the
+ * conversation goes.
+ */
+export interface CuePoint {
+  id: string;
+  text: string;
+  /** The advice thread, or the debrief after a rehearsal. */
+  source: "advice" | "debrief";
+  createdAt: string;
 }
 
 export type Turn = Pick<Message, "role" | "content">;
@@ -124,6 +146,13 @@ export interface ScenarioRequest {
 export interface RoleplayRequest {
   mode: ModeId;
   scenario: Scenario;
+  messages: Turn[];
+}
+
+/** POST /api/cues, the takeaways from one exchange, after it has happened. */
+export interface CuesRequest {
+  mode: ModeId;
+  /** The whole thread so far, so a cue isn't a repeat of an earlier one. */
   messages: Turn[];
 }
 

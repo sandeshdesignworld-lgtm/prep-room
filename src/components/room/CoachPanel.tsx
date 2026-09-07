@@ -3,12 +3,13 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import Composer from "@/components/advisor/Composer";
 import MessageBubble from "@/components/advisor/MessageBubble";
+import CuePoints from "./CuePoints";
 import { MODES, MODE_ORDER } from "@/lib/modes";
 import type { VoiceLoop } from "@/lib/voice-loop";
-import type { Message, ModeId } from "@/lib/types";
+import type { CuePoint, Message, ModeId } from "@/lib/types";
 
 /**
- * The right-hand panel: where the user says the next thing.
+ * The right-hand panel: the cue points, and where the user says the next thing.
  *
  * It does NOT show what the coach said, and that is the point. You do not read
  * along while someone talks to you; you listen and you answer. The coach speaks
@@ -20,6 +21,11 @@ import type { Message, ModeId } from "@/lib/types";
  * selector, somewhere to start from, a box, and whatever the room needs to put
  * underneath: the practice chips, and the debrief, which is the one place
  * coaching is allowed to be read rather than heard.
+ *
+ * What sits here instead is the running list of cue points: the two or three
+ * things worth carrying from each exchange, kept for the whole session. They
+ * are what a transcript was actually for, minus the part that made the room
+ * feel like a chat window.
  *
  * Nothing is lost. The full conversation is saved exactly as before and is
  * readable in History, which is where you go to review rather than to talk.
@@ -43,6 +49,15 @@ function TranscriptIcon() {
     <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" strokeWidth={1.8}>
       <rect x="4" y="3.5" width="16" height="17" rx="3" stroke="currentColor" />
       <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CueIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" strokeWidth={1.8}>
+      <path d="M5 7h14M5 12h14M5 17h8" stroke="currentColor" strokeLinecap="round" />
+      <circle cx="19" cy="17" r="2.2" stroke="currentColor" />
     </svg>
   );
 }
@@ -72,6 +87,7 @@ export default function CoachPanel({
   onNewConversation,
   /** False on the live page while the coach can be heard. */
   showTranscript,
+  cues,
   draft,
   onDraftChange,
   onSend,
@@ -95,6 +111,7 @@ export default function CoachPanel({
   onToggleSpeak: () => void;
   onNewConversation: () => void;
   showTranscript: boolean;
+  cues: CuePoint[];
   draft: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
@@ -116,7 +133,7 @@ export default function CoachPanel({
 
   return (
     <section
-      aria-label={showTranscript ? "Transcript" : "Your turn"}
+      aria-label={showTranscript ? "Transcript" : "Cue points"}
       className="flex min-h-[55vh] min-w-0 flex-col border-t border-line bg-card md:h-full md:min-h-0 md:w-[380px] md:shrink-0 md:border-t-0 md:border-l lg:w-[420px]"
     >
       <header className="shrink-0 border-b px-4 py-3 hairline">
@@ -125,11 +142,11 @@ export default function CoachPanel({
             aria-hidden
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fill text-ink-2"
           >
-            <TranscriptIcon />
+            {showTranscript ? <TranscriptIcon /> : <CueIcon />}
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink">
-              {showTranscript ? "Transcript" : "Your turn"}
+              {showTranscript ? "Transcript" : "Cue points"}
             </p>
             <p className="truncate text-xs text-ink-2">{MODES[mode].tagline}</p>
           </div>
@@ -179,7 +196,7 @@ export default function CoachPanel({
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {showTranscript && (
+        {showTranscript ? (
           <>
             <MessageBubble role="assistant" content={MODES[mode].opener} />
             {messages.map((m) => (
@@ -187,6 +204,8 @@ export default function CoachPanel({
             ))}
             {busy && <MessageBubble role="assistant" content={streamText} pending />}
           </>
+        ) : (
+          <CuePoints cues={cues} pending={busy} />
         )}
         {children}
         <div ref={bottomRef} />

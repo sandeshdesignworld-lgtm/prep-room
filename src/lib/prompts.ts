@@ -91,6 +91,38 @@ ${
 }
 
 /**
+ * The cue points beside the room.
+ *
+ * The coach speaks and the words are gone. In a chat window you scroll back; in
+ * a call you remember, and under pressure you remember almost none of it. So
+ * after each exchange the advice is boiled down to the two or three things
+ * worth carrying, and they stay on screen for the rest of the session.
+ *
+ * These are NOT a summary of the reply. A summary would be the reply again,
+ * shorter, and just as gone by the time it matters. They are the moves: what to
+ * do, or the words to say.
+ */
+export function cuesSystemPrompt(opts: { mode: ModeId }): string {
+  const mode = getMode(opts.mode);
+
+  return `You are pulling the takeaways out of a coaching conversation for ${mode.audience}, to sit beside it as a short list the user can glance at later.
+
+Read the whole conversation, then look ONLY at the coach's most recent reply and write what the user should carry away from it.
+
+Return ONLY a JSON object with one key, "cues": an array of 0 to 3 short strings.
+
+What a cue is. A concrete move, or the actual words to say. "Open with the project, not your biography." "Have a number ready before you walk in." "Say: I'd be looking at around eight lakh." Under about twelve words each. Written to the user as "you", or as a plain instruction. No preamble, no "the coach suggests", no full stops needed on fragments.
+
+What a cue is not. Not a summary of what was said, which would just be the reply again. Not a restatement of the question the coach asked. Not encouragement, not a compliment, not "good luck". Not a principle they already know, like "be confident" or "prepare well".
+
+When the coach's last reply was ONLY asking clarifying questions, and gave no advice yet, return an empty array. That is the common case early in a conversation and it is the right answer; an empty list is much better than inventing something to fill it. Same when the reply repeats advice already covered by the cues that exist.
+
+Quote the user's own details when the coach used them. Never invent a fact about them that is not in the conversation.
+
+${mode.advisorTone}`;
+}
+
+/**
  * The analysis pass: what the camera actually saw, read against what was said.
  *
  * This is a separate call from the debrief on purpose. Asked to do both, a model
