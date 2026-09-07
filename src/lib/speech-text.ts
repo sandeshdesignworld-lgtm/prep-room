@@ -28,3 +28,10 @@ export function forSpeaking(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Joins a dictated phrase onto whatever is already in the box. */
+export function joinSpoken(existing: string, addition: string): string {
+  if (!existing) return addition;
+  if (!addition) return existing;
+  return /\s$/.test(existing) ? existing + addition : `${existing} ${addition}`;
+}

@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { dictationErrorCopy, useDictation } from "@/lib/speech";
-
-/** Joins a dictated phrase onto whatever is already in the box. */
-function join(existing: string, addition: string): string {
-  if (!existing) return addition;
-  return /\s$/.test(existing) ? existing + addition : `${existing} ${addition}`;
-}
+import { dictationErrorCopy } from "@/lib/speech";
+import { joinSpoken } from "@/lib/speech-text";
+import { SILENCE_MS } from "@/lib/voice-activity";
+import type { VoiceLoop } from "@/lib/voice-loop";
 
 function MicIcon({ active }: { active: boolean }) {
   return (
@@ -18,54 +15,70 @@ function MicIcon({ active }: { active: boolean }) {
   );
 }
 
+/**
+ * The countdown before an auto-send. Deliberately quiet: a hairline that drains
+ * and one short line of text. It is a warning, not a demand, and the way to
+ * cancel it is to carry on talking, which is what someone mid-thought is doing
+ * anyway. Tapping it works too, for anyone who'd rather use their hands.
+ */
+function SendingIn({ remainingMs, onCancel }: { remainingMs: number; onCancel: () => void }) {
+  const left = Math.max(0, Math.min(1, remainingMs / SILENCE_MS));
+  return (
+    <button
+      type="button"
+      onClick={onCancel}
+      className="mb-1 block w-full rounded-lg px-2 pb-1 pt-0.5 text-left transition-colors hover:bg-fill-2"
+    >
+      <span aria-hidden className="block h-0.5 w-full overflow-hidden rounded-full bg-line">
+        <span
+          className="block h-full rounded-full bg-blue transition-[width] duration-100 ease-linear"
+          style={{ width: `${left * 100}%` }}
+        />
+      </span>
+      <span className="mt-1 block text-xs text-ink-2" role="status">
+        Sending in {(remainingMs / 1000).toFixed(1)}s — keep talking to hold it
+      </span>
+    </button>
+  );
+}
+
 export default function Composer({
   value,
   onChange,
   onSend,
   onStop,
-  onDictationStart,
   busy,
   placeholder,
   hint,
-  voiceEnabled = true,
+  voice,
+  autoSend,
+  onToggleAutoSend,
+  micOn,
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSend: () => void;
+  /** Takes the text explicitly, so the phrase still being recognised isn't lost. */
+  onSend: (text: string) => void;
   onStop: () => void;
-  onDictationStart: () => void;
   busy: boolean;
   placeholder: string;
   hint: string;
+  voice: VoiceLoop;
+  autoSend: boolean;
+  onToggleAutoSend: () => void;
   /**
    * False when the call's mic is muted. The mic button disappears rather than
    * sitting there disabled, so there is one obvious place to unmute: the call
    * controls, the same as any other call.
    */
-  voiceEnabled?: boolean;
+  micOn: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-
-  // onFinal fires from an event handler that outlives this render, so read the
-  // draft through a ref rather than the closed-over value.
-  const valueRef = useRef(value);
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
-
-  const dictation = useDictation({
-    onFinal: (text) => onChange(join(valueRef.current, text)),
-  });
-  const { listening, interim, error, start, stop: stopMic } = dictation;
-  const supported = dictation.supported && voiceEnabled;
-
-  // Muting mid-phrase has to actually stop the recogniser, not just hide it.
-  useEffect(() => {
-    if (!voiceEnabled && listening) stopMic();
-  }, [voiceEnabled, listening, stopMic]);
+  const { listening, interim, error, countdownMs, cancelPending } = voice;
+  const supported = voice.supported && micOn;
 
   // What's shown includes the phrase still being recognised; what's committed doesn't.
-  const shown = listening && interim ? join(value, interim) : value;
+  const shown = listening && interim ? joinSpoken(value, interim) : value;
 
   // Grow with the text instead of scrolling inside a two-line box.
   useEffect(() => {
@@ -75,26 +88,22 @@ export default function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [shown]);
 
-  const canSend = value.trim().length > 0 && !busy;
+  const canSend = shown.trim().length > 0 && !busy;
 
+  /** The manual path. Same send as auto-send takes, just pulled by hand. */
   function submit() {
-    if (listening) stopMic();
-    if (canSend) onSend();
-  }
-
-  function toggleMic() {
-    if (listening) {
-      stopMic();
-      return;
-    }
-    onDictationStart();
-    start();
+    const text = shown.trim();
+    if (!text || busy) return;
+    voice.stop();
+    onSend(text);
   }
 
   const status = error
     ? dictationErrorCopy(error)
     : listening
-      ? "Listening. Tap the mic when you're done."
+      ? autoSend
+        ? "Listening. Stop talking and it sends on its own."
+        : "Listening. Tap the mic when you're done."
       : hint;
 
   return (
@@ -104,13 +113,17 @@ export default function Composer({
         listening ? "border-blue" : "hairline",
       ].join(" ")}
     >
+      {countdownMs !== null && (
+        <SendingIn remainingMs={countdownMs} onCancel={cancelPending} />
+      )}
+
       <textarea
         ref={ref}
         rows={1}
         value={shown}
         onChange={(e) => {
           // Typing takes over from the mic rather than fighting it.
-          if (listening) stopMic();
+          if (listening) voice.stop();
           onChange(e.target.value);
         }}
         onKeyDown={(e) => {
@@ -127,7 +140,7 @@ export default function Composer({
           {supported && (
             <button
               type="button"
-              onClick={toggleMic}
+              onClick={voice.toggle}
               aria-pressed={listening}
               aria-label={listening ? "Stop listening" : "Speak instead of typing"}
               className={[
@@ -146,6 +159,26 @@ export default function Composer({
               <span className="relative">
                 <MicIcon active={listening} />
               </span>
+            </button>
+          )}
+          {supported && (
+            <button
+              type="button"
+              onClick={onToggleAutoSend}
+              aria-pressed={autoSend}
+              title={
+                autoSend
+                  ? `Your turn sends itself after ${SILENCE_MS / 1000}s of quiet`
+                  : "You send each turn yourself"
+              }
+              className={[
+                "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                autoSend
+                  ? "border-blue bg-blue/12 text-ink"
+                  : "hairline bg-card text-ink-3 hover:bg-fill",
+              ].join(" ")}
+            >
+              Auto-send {autoSend ? "on" : "off"}
             </button>
           )}
           <span

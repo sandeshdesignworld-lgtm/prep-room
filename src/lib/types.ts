@@ -17,6 +17,12 @@ export interface Profile {
   inputPreference: InputPreference;
   /** Phase 2: should the advisor speak its replies aloud. */
   speakReplies: boolean;
+  /**
+   * Send the user's turn on its own once they stop speaking. Undefined on
+   * profiles saved before the setting existed, and reads as on: this is a
+   * voice-first product and pressing Send every turn is what it's avoiding.
+   */
+  autoSend?: boolean;
   /** Bulbul speaker id. Undefined means the server default. */
   voice?: string;
   /** Phase 3/4: gentle ambient nudge during roleplay. Default off, deliberately. */

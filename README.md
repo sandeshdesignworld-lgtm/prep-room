@@ -73,6 +73,9 @@ npm run lint
 | `src/app/voices/page.tsx` | Audition all 41 Bulbul voices and pick one. |
 | `src/lib/speech.ts` | Web Speech API layer, dictation and read-aloud hooks. Feature-detects; the app works fully without either. |
 | `src/lib/speech-text.ts` | Pure sentence-chunking and speech-sanitising helpers, kept testable. |
+| `src/lib/voice-activity.ts` | Pure auto-send rules: the speech gate, the noise-blip filter, the silence countdown. Fully tested. |
+| `src/lib/mic.ts` | Microphone level only, via an AnalyserNode. No transcription, no recording, nothing leaves the page. |
+| `src/lib/voice-loop.ts` | Ties dictation, level and the send trigger together: auto-send, barge-in, hands-free pickup. |
 | `src/lib/storage.ts` | Session and profile persistence. Currently the browser; swap the bodies for API calls in Phase 5. |
 | `src/components/onboarding/` | Trust + consent screen, then setup. |
 | `src/components/advisor/` | Message bubbles and the composer, used by the coach panel. |
@@ -96,6 +99,15 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **Auto-send.** Done. With the mic open, a turn goes on its own after
+  `SILENCE_MS` (1500ms, one named constant in `src/lib/voice-activity.ts`) of
+  actual quiet, with a draining hairline and a "sending in" line that any sound
+  puts back. The level comes from an AnalyserNode rather than from recognition,
+  because recognition reports words late and cannot tell a pause from an ending.
+  Sound has to hold 140ms above threshold to count, so a door or a keyboard
+  doesn't hold a send open. Talking while the coach is speaking stops the coach
+  and starts listening. Send and Enter still work, and the toggle next to the mic
+  turns the whole thing off back to push-to-talk.
 - **The room.** The app is a video call: an icon rail on the left, the user's own
   camera filling the middle with the call controls over it, and the coach on the
   right carrying both the advice and the roleplay turns. Modes are a selector at

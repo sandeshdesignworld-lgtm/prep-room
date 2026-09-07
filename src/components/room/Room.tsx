@@ -9,6 +9,8 @@ import DebriefCard from "@/components/practice/DebriefCard";
 import { DIFFICULTIES, DIFFICULTY_LABEL, DIFFICULTY_NOTE } from "@/lib/scenario";
 import { getMode } from "@/lib/modes";
 import { useSpeaker } from "@/lib/speech";
+import { useVoiceLoop } from "@/lib/voice-loop";
+import { joinSpoken } from "@/lib/speech-text";
 import { CAPTURE_MESSAGE, downsample, summariseSignals, useSignalCapture } from "@/lib/signals";
 import { newMessage, newSession, saveProfile, saveSession, titleFor } from "@/lib/storage";
 import type {
@@ -60,6 +62,9 @@ export default function Room({
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(profile.inputPreference === "voice");
   const [speakOn, setSpeakOn] = useState(profile.speakReplies);
+  // Older profiles predate the setting, and voice-first is the point, so the
+  // absence of a stored preference means on.
+  const [autoSend, setAutoSend] = useState(profile.autoSend ?? true);
 
   const abortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef<string>(new Date().toISOString());
@@ -79,6 +84,7 @@ export default function Room({
     feed: feedSpeech,
     flush: flushSpeech,
     supported: speakSupported,
+    speaking: coachSpeaking,
   } = speaker;
 
   const capture = useSignalCapture();
@@ -114,6 +120,26 @@ export default function Room({
   }, [live, captureStatus, analysis, startAnalysis]);
 
   const nudgeLevel = profile.ambientNudge && analysis === "on" ? level : null;
+
+  /* -------------------------------- the voice ----------------------------- */
+
+  /**
+   * Auto-send changes what pulls the trigger, never what gets sent: it calls the
+   * same send() the Send button does, with the same text. A rehearsal being set
+   * up or debriefed counts as busy, because a turn arriving in the middle of
+   * either has nowhere to go.
+   */
+  const voice = useVoiceLoop({
+    micOn,
+    autoSend,
+    hasDraft: draft.trim().length > 0,
+    busy: busy || stage === "starting" || stage === "debriefing",
+    coachSpeaking,
+    getDraft: () => draft,
+    onDictated: (text) => setDraft((current) => joinSpoken(current, text)),
+    onSend: (text) => send(text),
+    onInterrupt: cancelSpeech,
+  });
 
   /* ------------------------------ persistence ----------------------------- */
 
@@ -339,8 +365,9 @@ export default function Room({
 
   /* -------------------------------- actions ------------------------------- */
 
-  function send() {
-    const text = draft.trim();
+  /** The one send path. Auto-send, the Send button and Enter all land here. */
+  function send(explicit?: string) {
+    const text = (explicit ?? draft).trim();
     if (!text || busy) return;
     setDraft("");
 
@@ -382,8 +409,15 @@ export default function Room({
     saveProfile({ ...profile, speakReplies: next });
   }
 
+  function toggleAutoSend() {
+    const next = !autoSend;
+    setAutoSend(next);
+    saveProfile({ ...profile, autoSend: next });
+  }
+
   function startFresh(nextMode: ModeId = session.mode) {
     stop();
+    voice.stop();
     if (analysis !== "off") endAnalysis();
     analysedRef.current = false;
     setError(null);
@@ -616,15 +650,19 @@ export default function Room({
         onDraftChange={setDraft}
         onSend={send}
         onStop={stop}
-        onDictationStart={cancelSpeech}
+        voice={voice}
+        autoSend={autoSend}
+        onToggleAutoSend={toggleAutoSend}
         micOn={micOn}
         placeholder={live ? "Say your line…" : mode.composerPlaceholder}
         hint={
           live
             ? "Feedback comes after. Hit End practice when you're done."
-            : micOn
-              ? "Tap the mic and just talk."
-              : "Enter to send, Shift+Enter for a new line."
+            : micOn && autoSend
+              ? "Tap the mic and just talk. It sends when you stop."
+              : micOn
+                ? "Tap the mic and just talk."
+                : "Enter to send, Shift+Enter for a new line."
         }
         footnote={mode.disclaimer ?? "Saved on this device only. No video ever leaves it."}
       >

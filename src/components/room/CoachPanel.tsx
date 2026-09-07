@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import Composer from "@/components/advisor/Composer";
 import MessageBubble from "@/components/advisor/MessageBubble";
 import { MODES, MODE_ORDER } from "@/lib/modes";
+import type { VoiceLoop } from "@/lib/voice-loop";
 import type { Message, ModeId } from "@/lib/types";
 
 /**
@@ -48,7 +49,9 @@ export default function CoachPanel({
   onDraftChange,
   onSend,
   onStop,
-  onDictationStart,
+  voice,
+  autoSend,
+  onToggleAutoSend,
   micOn,
   placeholder,
   hint,
@@ -66,9 +69,11 @@ export default function CoachPanel({
   onNewConversation: () => void;
   draft: string;
   onDraftChange: (v: string) => void;
-  onSend: () => void;
+  onSend: (text: string) => void;
   onStop: () => void;
-  onDictationStart: () => void;
+  voice: VoiceLoop;
+  autoSend: boolean;
+  onToggleAutoSend: () => void;
   micOn: boolean;
   placeholder: string;
   hint: string;
@@ -159,11 +164,13 @@ export default function CoachPanel({
           onChange={onDraftChange}
           onSend={onSend}
           onStop={onStop}
-          onDictationStart={onDictationStart}
           busy={busy}
           placeholder={placeholder}
           hint={hint}
-          voiceEnabled={micOn}
+          voice={voice}
+          autoSend={autoSend}
+          onToggleAutoSend={onToggleAutoSend}
+          micOn={micOn}
         />
         <p className="mt-1.5 px-1 text-center text-[11px] leading-relaxed text-ink-3">{footnote}</p>
       </div>
