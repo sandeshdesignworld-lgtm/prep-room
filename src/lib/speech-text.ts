@@ -20,6 +20,41 @@ export function lastSentenceBoundary(text: string): number {
   return last + 1;
 }
 
+/** A clause break: somewhere a speaker would naturally draw breath. */
+const CLAUSE_END = /[,;:](?=\s)/g;
+
+/**
+ * The shortest opening worth speaking on its own, in characters.
+ *
+ * Below this a fragment is a stub: "Right," said alone and then a pause while
+ * the rest synthesises is worse than waiting half a second longer.
+ */
+export const FIRST_CHUNK_MIN = 40;
+/** Past this, waiting for the full stop costs more than the odd break. */
+export const FIRST_CHUNK_MAX = 140;
+
+/**
+ * How much of the FIRST chunk of a reply is worth speaking now.
+ *
+ * The rest of the reply chunks on sentences, which is right: it reads
+ * naturally and nobody is waiting. The first one is different, because
+ * everything before it is silence, and silence at the start of a turn is what
+ * makes an app feel slow. So if a complete sentence has arrived, take it; if
+ * one hasn't and the opening has run long, take a clause instead.
+ */
+export function firstChunkBoundary(text: string): number {
+  const sentence = lastSentenceBoundary(text);
+  if (sentence > 0) return sentence;
+  if (text.length < FIRST_CHUNK_MAX) return 0;
+
+  let last = -1;
+  CLAUSE_END.lastIndex = 0;
+  for (let m = CLAUSE_END.exec(text); m; m = CLAUSE_END.exec(text)) {
+    if (m.index + 1 >= FIRST_CHUNK_MIN) last = m.index;
+  }
+  return last + 1;
+}
+
 /** Strips the markup the coach writes for the eye but that sounds wrong read out. */
 export function forSpeaking(text: string): string {
   return text

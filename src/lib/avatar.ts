@@ -174,6 +174,8 @@ type Controller = {
   onConnectionState: ((state: string) => void) | null;
   onConversationState: ((state: string) => void) | null;
   onError: ((error: { code?: string; message?: string }) => void) | null;
+  onPlaybackStall: ((stalled: boolean) => void) | null;
+  frameStarvationMode: string;
   initializeAudioContext: () => Promise<void>;
   start: () => Promise<void>;
   send: (audio: ArrayBuffer, end?: boolean) => string | null;
@@ -324,6 +326,26 @@ export function useAvatar({
       viewRef.current = view;
 
       const controller = view.controller;
+
+      /**
+       * Audio waits for motion, rather than running ahead of it.
+       *
+       * The default is audioIndependent: if animation frames run short the
+       * voice carries on and the mouth catches up later, which is exactly the
+       * drift this is meant to remove. strictSync pauses the audio instead, so
+       * the two can never separate. With PCM streaming straight from Sarvam the
+       * server is comfortably ahead and this should almost never fire; when it
+       * does, it says so rather than silently desyncing.
+       */
+      controller.frameStarvationMode = kit.FrameStarvationMode.strictSync;
+      controller.onPlaybackStall = (stalled) => {
+        if (stalled) {
+          console.warn(
+            "[Prime AI avatar] motion data ran short, holding the audio to keep the lips with it."
+          );
+        }
+      };
+
       controller.onConversationState = (state) => {
         if (live()) setSpeaking(state === "playing");
       };

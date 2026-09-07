@@ -1,6 +1,10 @@
-import { lastSentenceBoundary, forSpeaking } from "../.test-build/speech-text.js";
+import {
+  lastSentenceBoundary, forSpeaking,
+  firstChunkBoundary, FIRST_CHUNK_MIN, FIRST_CHUNK_MAX,
+} from "../.test-build/speech-text.js";
 
 let pass = 0, fail = 0;
+const ok = (name, cond) => { cond ? pass++ : fail++; console.log(`${cond ? "ok  " : "FAIL"}  ${name}`); };
 const eq = (name, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
   ok ? pass++ : fail++;
@@ -35,6 +39,28 @@ eq("strips bullet markers", forSpeaking("- Write it down\n- Say it aloud"), "Wri
 eq("strips smart quotes", forSpeaking('He said “I’m ready”'), "He said Im ready");
 eq("collapses whitespace", forSpeaking("too    many\n\n spaces"), "too many spaces");
 eq("empty stays empty", forSpeaking("  \n  "), "");
+
+console.log("--- the opening chunk ---");
+// Deliberately past FIRST_CHUNK_MAX with no full stop in it, which is the only
+// case where a clause break is allowed to stand in for one.
+const longNoStop =
+  "I think the honest answer here is that you are going to have to name the number first, because if you wait for them to say one they will anchor the whole conversation to it";
+ok("a complete sentence always wins",
+  firstChunkBoundary("Right, here is the thing. And then") === "Right, here is the thing.".length);
+ok("a short opening waits for the full stop",
+  firstChunkBoundary("Right, so") === 0);
+ok("a long opening breaks at a clause",
+  firstChunkBoundary(longNoStop) > 0 && firstChunkBoundary(longNoStop) < longNoStop.length);
+ok("and the break lands after a comma",
+  /,$/.test(longNoStop.slice(0, firstChunkBoundary(longNoStop))));
+ok("never breaks off a stub",
+  firstChunkBoundary(longNoStop) >= FIRST_CHUNK_MIN);
+ok("nothing to break in an empty string", firstChunkBoundary("") === 0);
+{
+  // A long opening whose only comma is far too early must still wait.
+  const early = "Well, " + "x".repeat(FIRST_CHUNK_MAX + 20);
+  ok("an early-only comma is not a break", firstChunkBoundary(early) === 0);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

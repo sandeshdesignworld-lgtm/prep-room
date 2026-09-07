@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { forSpeaking, lastSentenceBoundary } from "./speech-text";
-import { toPcm16 } from "./pcm";
+import { firstChunkBoundary, forSpeaking, lastSentenceBoundary } from "./speech-text";
 import type { AvatarSink } from "./avatar";
 
 /**
@@ -250,10 +249,77 @@ export function resolveEngine(): Promise<VoiceEngine> {
   return enginePromise;
 }
 
+/**
+ * Pumps one sentence of PCM from Sarvam into the avatar as it arrives.
+ *
+ * This is the whole sync fix. There used to be a decode in the middle: the mp3
+ * was fetched whole, turned into PCM in the page, and only then handed over, so
+ * nothing reached the avatar until the entire sentence had been synthesised and
+ * decoded. Now the bytes Sarvam streams are already the format the motion
+ * server wants, and they go straight through.
+ *
+ * Returns false when nothing was sent, so the caller can fall back.
+ */
+async function streamToAvatar(
+  clip: Clip,
+  avatar: AvatarSink,
+  live: () => boolean
+): Promise<boolean> {
+  const res = await clip.response.catch(() => null);
+  if (!res?.body) return false;
+
+  const reader = res.body.getReader();
+  /**
+   * A chunk boundary can land in the middle of a sample: PCM16 is two bytes and
+   * the network knows nothing about that. An odd trailing byte is carried into
+   * the next chunk rather than shipped, which would shift every sample after it
+   * by one byte and turn the rest of the sentence into noise.
+   */
+  let odd: Uint8Array | null = null;
+  let sent = false;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!live()) {
+        await reader.cancel().catch(() => {});
+        return sent;
+      }
+      let bytes = value;
+      if (odd) {
+        const joined = new Uint8Array(odd.length + bytes.length);
+        joined.set(odd);
+        joined.set(bytes, odd.length);
+        bytes = joined;
+        odd = null;
+      }
+      if (bytes.length % 2 === 1) {
+        odd = bytes.subarray(bytes.length - 1).slice();
+        bytes = bytes.subarray(0, bytes.length - 1);
+      }
+      if (bytes.length === 0) continue;
+      // A copy, because the SDK holds onto the buffer past this call and the
+      // reader is free to reuse the one it handed us.
+      if (!avatar.send(bytes.slice().buffer)) return sent;
+      sent = true;
+    }
+  } catch {
+    // A dropped stream mid-sentence. Whatever arrived has already been sent.
+  }
+  return sent;
+}
+
 interface Clip {
   text: string;
   controller: AbortController;
-  blob: Promise<Blob | null>;
+  /**
+   * How this clip is going to be played, decided when it was requested rather
+   * than when it is played, because the format has to be asked of the server.
+   * "pcm" streams into the avatar; "mp3" goes to an <audio> element.
+   */
+  format: "pcm" | "mp3";
+  response: Promise<Response | null>;
 }
 
 /**
@@ -364,7 +430,8 @@ export function useSpeaker({
 
   const playClip = useCallback(
     async (clip: Clip) => {
-      const blob = await clip.blob.catch(() => null);
+      const res = await clip.response.catch(() => null);
+      const blob = res ? await res.blob().catch(() => null) : null;
       if (!blob) {
         await speakInBrowser(clip.text);
         return;
@@ -398,20 +465,20 @@ export function useSpeaker({
     while (queueRef.current.length > 0 && generation === generationRef.current) {
       const clip = queueRef.current.shift()!;
 
-      // The avatar path doesn't wait for playback to finish. Its whole model is
-      // that audio is pushed as it arrives and the motion server stays ahead;
-      // pacing it to wall-clock here is exactly what its docs warn stalls it.
+      // The avatar path never waits for playback. Audio is pushed to the motion
+      // server as fast as Sarvam produces it and the avatar plays it on its own
+      // clock; pacing it to wall-clock here is exactly what its docs warn
+      // stalls it. What this DOES wait for is the whole of one clip's stream
+      // before starting the next, so sentences reach the server in order.
       const avatar = sinkRef.current;
-      if (avatar?.ready) {
-        const blob = await clip.blob.catch(() => null);
+      if (clip.format === "pcm" && avatar?.ready) {
+        const sent = await streamToAvatar(clip, avatar, () => generation === generationRef.current);
         if (generation !== generationRef.current) break;
-        const pcm = blob ? await toPcm16(blob) : null;
-        if (generation !== generationRef.current) break;
-        if (pcm && avatar.send(pcm)) {
+        if (sent) {
           avatarRoundRef.current = true;
           continue;
         }
-        // Wouldn't decode, or the avatar wouldn't take it. Say it anyway.
+        // Nothing arrived, or the avatar refused it. Say it the plain way.
         await speakInBrowser(clip.text);
         continue;
       }
@@ -442,20 +509,24 @@ export function useSpeaker({
       const engine = await resolveEngine();
       if (engine === "none") return;
 
+      // Asked now, not at playback: the request has to name the format, and by
+      // the time this clip's turn comes round the answer would be the same.
+      const format = sinkRef.current?.ready ? "pcm" : "mp3";
+
       const controller = new AbortController();
-      const blob: Promise<Blob | null> =
+      const response: Promise<Response | null> =
         engine === "bulbul"
           ? fetch("/api/speak", {
               method: "POST",
               headers: { "content-type": "application/json" },
               signal: controller.signal,
-              body: JSON.stringify({ text, speaker: speakerRef.current }),
+              body: JSON.stringify({ text, speaker: speakerRef.current, format }),
             })
-              .then((r) => (r.ok ? r.blob() : null))
+              .then((r) => (r.ok ? r : null))
               .catch(() => null)
           : Promise.resolve(null);
 
-      queueRef.current.push({ text, controller, blob });
+      queueRef.current.push({ text, controller, format, response });
       void drain();
     },
     [drain]
@@ -466,7 +537,10 @@ export function useSpeaker({
     (full: string) => {
       if (!enabledRef.current) return;
       const pending = full.slice(spokenUpToRef.current);
-      const boundary = lastSentenceBoundary(pending);
+      // Nothing spoken yet this reply, so this is the opening and it is allowed
+      // to break at a clause rather than wait for a full stop.
+      const boundary =
+        spokenUpToRef.current === 0 ? firstChunkBoundary(pending) : lastSentenceBoundary(pending);
       if (boundary <= 0) return;
       spokenUpToRef.current += boundary;
       void enqueue(pending.slice(0, boundary));

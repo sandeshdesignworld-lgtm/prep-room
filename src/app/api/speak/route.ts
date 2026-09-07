@@ -1,4 +1,4 @@
-import { DEFAULT_SPEAKER, sarvamConfigured, speak } from "@/lib/sarvam";
+import { CONTENT_TYPE, DEFAULT_SPEAKER, sarvamConfigured, speak, type SpeechFormat } from "@/lib/sarvam";
 import { isSpeaker } from "@/lib/voices";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Voice is not configured." }, { status: 503 });
   }
 
-  let body: { text?: unknown; speaker?: unknown };
+  let body: { text?: unknown; speaker?: unknown; format?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -33,9 +33,11 @@ export async function POST(request: Request) {
   }
 
   const speaker = isSpeaker(body.speaker) ? body.speaker : DEFAULT_SPEAKER;
+  // Raw PCM when the avatar is going to play it, mp3 when an <audio> is.
+  const format: SpeechFormat = body.format === "pcm" ? "pcm" : "mp3";
 
   try {
-    const upstream = await speak({ text, speaker, signal: request.signal });
+    const upstream = await speak({ text, speaker, format, signal: request.signal });
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
@@ -47,9 +49,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Passed straight through, still streaming: the client starts playing on
+    // the first chunk rather than waiting for the sentence to finish.
     return new Response(upstream.body, {
       headers: {
-        "content-type": "audio/mpeg",
+        "content-type": CONTENT_TYPE[format],
         "cache-control": "no-store",
       },
     });
