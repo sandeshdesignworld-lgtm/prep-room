@@ -74,7 +74,8 @@ npm run lint
 | `src/app/api/debrief/route.ts` | `POST /api/debrief`, scored debrief as JSON. Two concurrent passes: the debrief itself, and the delivery analysis that reads the signal timeline against the transcript. Structured output, with `json.ts` as a fallback parser. |
 | `src/components/room/` | The room: the call stage (hero camera, live pills, call controls), the signal cards under it, the coach panel on the right, and `Room.tsx` holding the session that runs through both. |
 | `src/components/practice/` | Debrief card, ambient nudge, signal timeline. |
-| `src/components/app/` | The icon rail, history, progress, and the data/privacy controls. |
+| `src/components/app/` | The icon rail, the home screen, history, progress, and the data/privacy controls. |
+| `src/components/app/Home.tsx` | The every-session doorway. Nothing starts until a mode is picked, which is what keeps the camera prompt off page load. |
 | `src/lib/progress.ts` | Aggregates saved sessions into the progress numbers. Pure and tested. |
 | `src/app/privacy/page.tsx` | The privacy notice. Static, readable without signing in. |
 | `tests/` | Plain assertion scripts for every pure module. `npm test`. |
@@ -117,6 +118,15 @@ npm run lint
   it (eye contact, open posture, steady), the counterpart's current line beneath,
   and the debrief afterwards getting a per-turn summary and a small-multiples
   timeline.
+- **The home screen.** Done. Every session opens on a doorway, not a live call:
+  a serif headline, one line on how it works, and the three modes as cards.
+  Nothing starts until a card is tapped — no camera, no microphone, no avatar —
+  so the permission prompt is the consequence of a decision the user just made
+  rather than something that happens to them on load. Verified in a browser:
+  zero `getUserMedia` calls before the click, and the camera up right after it.
+  Distinct from the first-run trust screen, which is a one-time consent and is
+  unchanged. Home is also a rail item, so leaving the room (and stopping the
+  camera) is one click.
 - **The coach has a face.** Done. Spatius AvatarKit renders the coach on a
   canvas in the page, in Direct Mode: the coach's Sarvam audio is decoded to
   mono PCM16 in the browser, sent to the Spatius motion server, and the avatar

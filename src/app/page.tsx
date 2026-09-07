@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import Welcome from "@/components/onboarding/Welcome";
 import Setup from "@/components/onboarding/Setup";
 import Room from "@/components/room/Room";
+import HomeScreen from "@/components/app/Home";
 import AppShell, { type View } from "@/components/app/AppShell";
 import HistoryView from "@/components/app/HistoryView";
 import ProgressView from "@/components/app/ProgressView";
@@ -20,7 +21,7 @@ import {
   subscribeProfile,
   subscribeSessions,
 } from "@/lib/storage";
-import type { Session } from "@/lib/types";
+import type { ModeId, Session } from "@/lib/types";
 
 export default function Home() {
   // The profile lives in localStorage, which doesn't exist during SSR. Subscribing
@@ -42,6 +43,13 @@ export default function Home() {
   // Set when the user opens a specific thread from History; otherwise we resume
   // whatever they were last on.
   const [opened, setOpened] = useState<Session | null>(null);
+  /**
+   * Null until the user picks something on the home screen. This is what keeps
+   * the camera off: Room is what asks for it, and Room is not mounted until
+   * there is a mode here. Starts null every session on purpose, so a reload
+   * lands on the doorway rather than in a live call.
+   */
+  const [entered, setEntered] = useState<ModeId | null>(null);
 
   const resumed = useMemo(
     () => (profile ? (sessions[0] ?? newSession(profile.mode)) : null),
@@ -66,13 +74,26 @@ export default function Home() {
     );
   }
 
-  const session = opened ?? resumed;
-  if (!session) return null;
-
   function open(next: Session) {
     setOpened(next);
+    // Opening a specific thread is itself the choice the home screen asks for.
+    setEntered(next.mode);
     setView("advisor");
   }
+
+  /** A card on the home screen. The first click of the session, and the one
+   *  that earns the camera prompt. */
+  function enter(mode: ModeId) {
+    const current = opened ?? resumed;
+    // Carry on with the thread already in progress when it's the same mode;
+    // anything else starts clean rather than switching tone mid-conversation.
+    setOpened(current && current.mode === mode ? current : newSession(mode));
+    setEntered(mode);
+    setView("advisor");
+  }
+
+  const session = opened ?? resumed;
+  if (!session) return null;
 
   function remove(id: string) {
     deleteSession(id);
@@ -82,17 +103,28 @@ export default function Home() {
   }
 
   return (
-    <AppShell view={view} onChange={setView}>
-      {view === "advisor" && (
-        <Room key={session.id} profile={profile} initialSession={session} />
-      )}
+    <AppShell
+      view={view}
+      onChange={setView}
+      onHome={() => {
+        setEntered(null);
+        setView("advisor");
+      }}
+      atHome={entered === null}
+    >
+      {view === "advisor" &&
+        (entered === null ? (
+          <HomeScreen onPick={enter} goal={profile.goal} />
+        ) : (
+          <Room key={session.id} profile={profile} initialSession={session} />
+        ))}
 
       {view === "history" && (
         <HistoryView
           sessions={sessions}
           onOpen={open}
           onDelete={remove}
-          onStartNew={() => open(newSession(profile.mode))}
+          onStartNew={() => enter(profile.mode)}
         />
       )}
 
@@ -104,6 +136,7 @@ export default function Home() {
           sessions={sessions}
           onWiped={() => {
             setOpened(null);
+            setEntered(null);
             setAccepted(false);
             setView("advisor");
           }}

@@ -13,6 +13,15 @@ export type View = "advisor" | "history" | "progress" | "data";
  * and are always available to a screen reader.
  */
 
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
+      <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19v-8.5Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M9.5 20.5V14h5v6.5" stroke="currentColor" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function CoachIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" strokeWidth={1.7}>
@@ -95,12 +104,19 @@ function NavButton({
 export default function AppShell({
   view,
   onChange,
+  onHome,
+  atHome,
   children,
 }: {
   view: View;
   onChange: (v: View) => void;
+  /** Back to the doorway. Leaving the room unmounts it, which stops the camera. */
+  onHome: () => void;
+  /** True when the doorway is what's on screen, so the rail says where you are. */
+  atHome: boolean;
   children: ReactNode;
 }) {
+  const homeActive = atHome && view === "advisor";
   const items = [...NAV, PROFILE];
 
   return (
@@ -117,11 +133,14 @@ export default function AppShell({
         >
           P
         </span>
+        <NavButton label="Home" active={homeActive} onClick={onHome}>
+          <HomeIcon />
+        </NavButton>
         {NAV.map((item) => (
           <NavButton
             key={item.id}
             label={item.label}
-            active={view === item.id}
+            active={view === item.id && !(item.id === "advisor" && homeActive)}
             onClick={() => onChange(item.id)}
           >
             <item.icon />
@@ -145,21 +164,36 @@ export default function AppShell({
         aria-label="Sections"
         className="flex shrink-0 items-center justify-around border-t bg-card px-2 py-1.5 hairline md:hidden"
       >
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange(item.id)}
-            aria-current={view === item.id ? "page" : undefined}
-            aria-label={item.label}
-            className={[
-              "flex h-11 w-16 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors",
-              view === item.id ? "bg-coral/12 text-coral" : "text-ink-3",
-            ].join(" ")}
-          >
-            <item.icon />
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={onHome}
+          aria-current={homeActive ? "page" : undefined}
+          aria-label="Home"
+          className={[
+            "flex h-11 w-16 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors",
+            homeActive ? "bg-coral/12 text-coral" : "text-ink-3",
+          ].join(" ")}
+        >
+          <HomeIcon />
+        </button>
+        {items.map((item) => {
+          const active = view === item.id && !(item.id === "advisor" && homeActive);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onChange(item.id)}
+              aria-current={active ? "page" : undefined}
+              aria-label={item.label}
+              className={[
+                "flex h-11 w-16 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors",
+                active ? "bg-coral/12 text-coral" : "text-ink-3",
+              ].join(" ")}
+            >
+              <item.icon />
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
