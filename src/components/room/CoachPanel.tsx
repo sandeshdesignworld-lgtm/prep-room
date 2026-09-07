@@ -8,13 +8,25 @@ import type { VoiceLoop } from "@/lib/voice-loop";
 import type { Message, ModeId } from "@/lib/types";
 
 /**
- * The transcript, on the right. It carries the whole session: the advice thread
- * and, once a rehearsal starts, the roleplay turns underneath it, so there is
- * one continuous record of what was said rather than two.
+ * The right-hand panel: where the user says the next thing.
  *
- * It used to introduce the coach as well, with a monogram and a name. The coach
- * is on the stage now, so this is what was said and where the user says the next
- * thing, and nothing else.
+ * It does NOT show what the coach said, and that is the point. You do not read
+ * along while someone talks to you; you listen and you answer. The coach speaks
+ * with a face and a voice, and reading its words a second and a half ahead of
+ * hearing them was the single thing most making this feel like a chat window
+ * with a video stuck on top.
+ *
+ * The user's own turns are out too, for the same reason. What is left is a mode
+ * selector, somewhere to start from, a box, and whatever the room needs to put
+ * underneath: the practice chips, and the debrief, which is the one place
+ * coaching is allowed to be read rather than heard.
+ *
+ * Nothing is lost. The full conversation is saved exactly as before and is
+ * readable in History, which is where you go to review rather than to talk.
+ *
+ * The exception is a coach that cannot speak: with read-aloud off, or a browser
+ * with no speech at all, the text IS the conversation and hiding it would leave
+ * a room where nothing happens.
  *
  * The mode selector lives at the top of this panel rather than on its own
  * screen. Switching mode is a small decision about tone, not a destination.
@@ -58,6 +70,8 @@ export default function CoachPanel({
   speakSupported,
   onToggleSpeak,
   onNewConversation,
+  /** False on the live page while the coach can be heard. */
+  showTranscript,
   draft,
   onDraftChange,
   onSend,
@@ -80,6 +94,7 @@ export default function CoachPanel({
   speakSupported: boolean;
   onToggleSpeak: () => void;
   onNewConversation: () => void;
+  showTranscript: boolean;
   draft: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
@@ -101,7 +116,7 @@ export default function CoachPanel({
 
   return (
     <section
-      aria-label="Transcript"
+      aria-label={showTranscript ? "Transcript" : "Your turn"}
       className="flex min-h-[55vh] min-w-0 flex-col border-t border-line bg-card md:h-full md:min-h-0 md:w-[380px] md:shrink-0 md:border-t-0 md:border-l lg:w-[420px]"
     >
       <header className="shrink-0 border-b px-4 py-3 hairline">
@@ -113,7 +128,9 @@ export default function CoachPanel({
             <TranscriptIcon />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-ink">Transcript</p>
+            <p className="truncate text-sm font-semibold text-ink">
+              {showTranscript ? "Transcript" : "Your turn"}
+            </p>
             <p className="truncate text-xs text-ink-2">{MODES[mode].tagline}</p>
           </div>
           {speakSupported && (
@@ -162,11 +179,15 @@ export default function CoachPanel({
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        <MessageBubble role="assistant" content={MODES[mode].opener} />
-        {messages.map((m) => (
-          <MessageBubble key={m.id} role={m.role} content={m.content} />
-        ))}
-        {busy && <MessageBubble role="assistant" content={streamText} pending />}
+        {showTranscript && (
+          <>
+            <MessageBubble role="assistant" content={MODES[mode].opener} />
+            {messages.map((m) => (
+              <MessageBubble key={m.id} role={m.role} content={m.content} />
+            ))}
+            {busy && <MessageBubble role="assistant" content={streamText} pending />}
+          </>
+        )}
         {children}
         <div ref={bottomRef} />
       </div>

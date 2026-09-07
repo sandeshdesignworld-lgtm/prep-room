@@ -116,6 +116,13 @@ export default function Room({
   // has to be true for both or talking over the avatar wouldn't stop it.
   const coachSpeaking = speakerSpeaking || avatar.speaking;
 
+  /**
+   * The live page shows what the coach said only when it cannot say it. A coach
+   * that speaks is listened to; a coach that can't has to be read, and hiding
+   * its words then would leave a room where nothing happens.
+   */
+  const showTranscript = !(speakOn && speakSupported);
+
   const capture = useSignalCapture();
   const {
     status: captureStatus,
@@ -629,10 +636,14 @@ export default function Room({
             </span>
             <span aria-hidden className="h-px flex-1 bg-line" />
           </div>
-          {scenario.opening && <MessageBubble role="assistant" content={scenario.opening} />}
-          {roleplayTurns.map((t) => (
-            <MessageBubble key={t.id} role={t.role} content={t.content} />
-          ))}
+          {showTranscript && (
+            <>
+              {scenario.opening && <MessageBubble role="assistant" content={scenario.opening} />}
+              {roleplayTurns.map((t) => (
+                <MessageBubble key={t.id} role={t.role} content={t.content} />
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -711,6 +722,7 @@ export default function Room({
         speakSupported={speakSupported}
         onToggleSpeak={toggleSpeak}
         onNewConversation={() => startFresh()}
+        showTranscript={showTranscript}
         draft={draft}
         onDraftChange={setDraft}
         onSend={send}
@@ -729,7 +741,12 @@ export default function Room({
                 ? "Tap the mic and just talk."
                 : "Enter to send, Shift+Enter for a new line."
         }
-        footnote={mode.disclaimer ?? "Saved on this device only. No video ever leaves it."}
+        footnote={
+          mode.disclaimer ??
+          (showTranscript
+            ? "Saved on this device only. No video ever leaves it."
+            : "Your coach speaks rather than types. The whole conversation is in History.")
+        }
       >
         {panelExtras}
       </CoachPanel>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SessionTranscript from "./SessionTranscript";
 import { MODES } from "@/lib/modes";
 import { relativeDay } from "@/lib/progress";
 import type { Session } from "@/lib/types";
@@ -23,6 +24,8 @@ export default function HistoryView({
   onStartNew: () => void;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  // The room doesn't show the conversation any more, so this is where it is read.
+  const [reading, setReading] = useState<string | null>(null);
 
   if (sessions.length === 0) {
     return (
@@ -52,11 +55,16 @@ export default function HistoryView({
           device
         </span>
       </div>
+      <p className="mt-1 text-sm leading-relaxed text-ink-2">
+        Your coach speaks rather than types, so this is where the words are. Read any conversation
+        in full, including the practice run and the debrief.
+      </p>
 
       <ul className="mt-4 space-y-2">
         {sessions.map((session) => {
           const mode = MODES[session.mode];
           const isConfirming = confirming === session.id;
+          const isReading = reading === session.id;
           return (
             <li key={session.id} className="rounded-2xl border bg-card hairline">
               <div className="flex items-start gap-3 p-4">
@@ -88,16 +96,29 @@ export default function HistoryView({
                 )}
 
                 {!isConfirming && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirming(session.id)}
-                    aria-label={`Delete ${session.title}`}
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-3 transition-colors hover:bg-fill-2 hover:text-red"
-                  >
-                    Delete
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setReading(isReading ? null : session.id)}
+                      aria-expanded={isReading}
+                      aria-label={`${isReading ? "Hide" : "Read"} ${session.title}`}
+                      className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-fill-2 hover:text-ink"
+                    >
+                      {isReading ? "Hide" : "Read"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(session.id)}
+                      aria-label={`Delete ${session.title}`}
+                      className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-3 transition-colors hover:bg-fill-2 hover:text-red"
+                    >
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
+
+              {isReading && <SessionTranscript session={session} />}
 
               {isConfirming && (
                 <div className="flex flex-wrap items-center gap-2 border-t border-line/60 px-4 py-3">
