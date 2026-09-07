@@ -1,0 +1,32 @@
+# Replit configuration.
+#
+# The deployment target is `autoscale`: this app is a Next.js server that is
+# idle between conversations and does its work in bursts, which is exactly what
+# autoscale is for, and it scales to zero when nobody is practising.
+#
+# Every secret goes in Replit's Secrets pane, never in this file and never in
+# the repo. The app needs ANTHROPIC_API_KEY to work at all; SARVAM_API_KEY adds
+# the coach's voice, and the three SPATIUS_ values add its face. Each one is
+# independently optional after the first, and the app degrades rather than
+# breaking when one is missing.
+
+modules = ["nodejs-22"]
+
+run = ["npm", "run", "dev"]
+
+# Next serves on $PORT, which Replit sets. 80 is what the outside world sees.
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
+
+[env]
+# Nothing about a build needs reporting to anyone.
+NEXT_TELEMETRY_DISABLED = "1"
+
+[nix]
+channel = "stable-24_05"

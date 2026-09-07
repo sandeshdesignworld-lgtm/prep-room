@@ -60,6 +60,41 @@ npm run build   # typecheck + production build
 npm run lint
 ```
 
+## Deploying to Replit
+
+The repo carries a `.replit` that sets it up as an autoscale deployment: the
+build is `npm run build`, the server is `npm run start`, and Next serves on the
+`PORT` Replit provides, bound to `0.0.0.0` so it is reachable from outside the
+container.
+
+1. **Create the Repl.** In Replit, *Create Repl* then *Import from GitHub*, and
+   point it at this repository.
+2. **Add the secrets**, in Replit's Secrets pane and nowhere else. They are the
+   same names as `.env.local`, and each is independently optional after the
+   first:
+
+   | Secret | Without it |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | The coach cannot answer at all. This one is required. |
+   | `SARVAM_API_KEY` | The coach types instead of speaking, and has no avatar. |
+   | `SPATIUS_APP_ID`, `SPATIUS_API_KEY`, `SPATIUS_AVATAR_ID` | The coach speaks with a monogram rather than a face. |
+
+3. **Deploy.** Pick *Autoscale*. It scales to zero between sessions, which suits
+   an app that is idle until someone opens it, at the cost of a slow first
+   request after a quiet spell.
+
+Three things worth knowing before you rely on it:
+
+- **The camera needs HTTPS.** Replit serves deployments over HTTPS, so
+  `getUserMedia` works. It will not work over plain HTTP on a custom domain.
+- **The build fetches about 9MB of MediaPipe models** and copies AvatarKit's
+  WASM into `public/`. Both are gitignored and regenerated every build. If the
+  model download fails the build still succeeds and the app runs without
+  delivery signals, which is deliberate.
+- **Deployments are billed.** Autoscale charges for compute and requests, and
+  this is not a small runtime: a Next server, plus whatever Anthropic, Sarvam
+  and Spatius cost per session.
+
 ## Where things are
 
 | Path | What it is |
