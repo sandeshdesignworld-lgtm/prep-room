@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDictation, type DictationError } from "./speech";
 import { useMicActivity } from "./mic";
 import { joinSpoken } from "./speech-text";
-import { shouldSend, silenceRemaining } from "./voice-activity";
+import { lastHeard, shouldSend, silenceRemaining } from "./voice-activity";
 
 /**
  * The voice half of a turn, in one place: what the user said, when they stopped
@@ -110,15 +110,26 @@ export function useVoiceLoop({
   }, [levelAvailable]);
 
   /**
-   * When the user was last making a sound.
+   * When the user was last making a sound. Whichever source heard them last.
    *
-   * The level meter is the honest answer when it's running: it stamps while the
-   * user is actually speaking. Recognition results arrive up to a second after
-   * the fact, so folding them in as well would quietly stretch a 1.5s window
-   * into three. They are the fallback, not a second opinion.
+   * This used to prefer the level meter and fall back to recognition only when
+   * the meter was unavailable, on the reasoning that recognition results arrive
+   * late and would stretch the window. The reasoning was right and the rule was
+   * wrong, because there is a third state it ignored: a meter that is running
+   * and never hears anything. A quiet mic, a laptop across the desk, low input
+   * gain. Then the meter's stamp stays at zero, the countdown is suppressed
+   * forever, and the user talks, watches their words appear, and never gets an
+   * answer. For an app whose users are the softly spoken ones, that is the
+   * worst failure in it.
+   *
+   * So: the later of the two. When the meter is working it is almost always the
+   * later one, because it stamps during speech, and the window stays honest.
+   * When it hears nothing, recognition carries the clock on its own. The lag is
+   * smaller than it looks, too, since interim results land while the user is
+   * still talking rather than after they stop.
    */
   const lastSpeechAt = useCallback(
-    () => (levelAvailableRef.current ? mic.speechAt.current : heardAtRef.current),
+    () => lastHeard(levelAvailableRef.current ? mic.speechAt.current : 0, heardAtRef.current),
     [mic.speechAt]
   );
 
@@ -126,9 +137,11 @@ export function useVoiceLoop({
     interimRef.current = interim;
     if (!interim) return;
     heardAtRef.current = performance.now();
-    // Barge-in for browsers with no level meter: a word landing while the coach
-    // is mid-sentence is the user talking over it.
-    if (!levelAvailableRef.current) onInterruptRef.current();
+    // A word arriving while the coach is mid-sentence is the user talking over
+    // it, whatever the level meter did or didn't notice. Not conditional on the
+    // meter being absent: a meter that is running but never crosses its
+    // threshold is exactly the case where this is the only thing that fires.
+    onInterruptRef.current();
   }, [interim]);
 
   /* --------------------------- barge-in and pickup ------------------------- */

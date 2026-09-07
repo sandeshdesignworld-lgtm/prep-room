@@ -1,5 +1,6 @@
 import {
   advanceGate, newSpeechGate, rms, silenceRemaining, shouldSend,
+  lastHeard,
   SILENCE_MS, SPEECH_ON_RMS, SPEECH_OFF_RMS, SPEECH_MIN_MS, MIN_VISIBLE_MS,
 } from "../.test-build/voice-activity.js";
 
@@ -90,6 +91,18 @@ ok(
   "then goes once it has had it",
   shouldSend({ lastSpeechAt: 1, armedAt: 5000, now: 5000 + MIN_VISIBLE_MS + 50 }) === true
 );
+
+/* ---------------------------- which clock wins -------------------------- */
+
+console.log("--- last heard ---");
+// The regression: a level meter that is running but has never crossed its
+// threshold reports 0, and 0 must never beat a real recognition stamp. When it
+// did, a quiet microphone meant the countdown never started and the user's turn
+// was never sent, however clearly they had been transcribed.
+ok("a silent meter never outranks a heard word", lastHeard(0, 4200) === 4200);
+ok("a working meter wins when it is later", lastHeard(4200, 3000) === 4200);
+ok("recognition wins when it is later", lastHeard(3000, 4200) === 4200);
+ok("neither has heard anything", lastHeard(0, 0) === 0);
 
 /* ------------------------- the window is on purpose --------------------- */
 

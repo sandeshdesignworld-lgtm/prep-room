@@ -95,6 +95,20 @@ export function rms(frame: ArrayLike<number>): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * When the user was last heard, given both clocks: the microphone level meter
+ * and the speech recogniser. Zero from either means "that one has heard
+ * nothing", not "the user stopped talking just now".
+ *
+ * Trivial, and it exists because getting it wrong was not. Preferring the meter
+ * whenever it was merely RUNNING meant a quiet microphone reported zero forever
+ * and the countdown never started: the user spoke, watched their words appear
+ * on screen, and never got an answer.
+ */
+export function lastHeard(meterAt: number, recognisedAt: number): number {
+  return Math.max(meterAt, recognisedAt);
+}
+
 /** Milliseconds left before the turn goes. 0 means send it. */
 export function silenceRemaining(
   lastSpeechAt: number,
