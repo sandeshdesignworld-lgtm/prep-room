@@ -130,9 +130,21 @@ export default function CoachPanel({
   /** Practice chips, roleplay turns, the debrief: whatever the room adds below the thread. */
   children?: ReactNode;
 }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  /**
+   * Keeps this panel scrolled to its newest content, and touches nothing else.
+   *
+   * scrollIntoView was doing this, and on a desktop it looked fine because the
+   * panel is its own column. On a phone the panel is stacked under the stage in
+   * one scrolling page, so scrolling the panel's last element into view
+   * scrolled the PAGE, and every arriving cue point dragged the camera, the
+   * pills and the controls up off the screen. Setting scrollTop on the
+   * container moves the container and nothing above it.
+   */
+  const scrollerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, streamText, children]);
 
   return (
@@ -171,7 +183,7 @@ export default function CoachPanel({
           <button
             type="button"
             onClick={onNewConversation}
-            className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-fill hover:text-ink"
+            className="flex h-9 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-ink-2 transition-colors hover:bg-fill hover:text-ink"
           >
             New
           </button>
@@ -188,7 +200,7 @@ export default function CoachPanel({
                 onClick={() => onModeChange(id)}
                 aria-pressed={active}
                 className={[
-                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  "flex h-9 items-center rounded-full border px-3 text-xs font-medium transition-colors",
                   active ? ACCENT_CHIP[m.accent] : "hairline bg-card text-ink-2 hover:bg-fill",
                 ].join(" ")}
               >
@@ -199,7 +211,7 @@ export default function CoachPanel({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div ref={scrollerRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {showTranscript ? (
           <>
             <MessageBubble role="assistant" content={MODES[mode].opener} />
@@ -212,7 +224,6 @@ export default function CoachPanel({
           <CuePoints cues={cues} pending={busy} />
         )}
         {children}
-        <div ref={bottomRef} />
       </div>
 
       <div className="shrink-0 border-t px-3 pb-3 pt-2.5 hairline">

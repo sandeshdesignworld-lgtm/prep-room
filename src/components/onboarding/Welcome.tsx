@@ -74,7 +74,7 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
               href="/privacy"
               target="_blank"
               rel="noreferrer"
-              className="text-blue-strong underline underline-offset-2"
+              className="inline-block py-2 text-blue-strong underline underline-offset-2"
             >
               full privacy policy
             </a>

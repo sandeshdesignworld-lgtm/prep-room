@@ -60,6 +60,41 @@ npm run build   # typecheck + production build
 npm run lint
 ```
 
+## Installing it to a home screen
+
+The app is a PWA: a manifest, a service worker, and the iOS meta tags Safari
+needs. Installed, it opens without browser chrome and keeps its own icon.
+
+**It must be served over HTTPS.** Not a convention, a hard requirement, and the
+one that catches people out: on a plain HTTP origin the browser reports the page
+as an insecure context, which means `navigator.mediaDevices` does not exist at
+all and neither does the service worker. Pointing a phone at
+`http://<laptop-ip>:3000` gives a room with no camera, no microphone and no
+install prompt. Measured, not assumed:
+
+| Origin | Secure context | Camera | Service worker |
+|---|---|---|---|
+| `http://localhost:3000` | yes | works | available |
+| `http://192.168.x.x:3000` | **no** | **unavailable** | **unavailable** |
+
+So test on the Replit deployment, which is HTTPS, or on `localhost` on the
+machine running it.
+
+**Android, Chrome.** Open the deployed URL, then the three-dot menu and *Install
+app* (or *Add to Home screen*). Chrome also offers an install prompt in the
+address bar once the manifest and service worker are both live.
+
+**iPhone, Safari.** It must be Safari; Chrome on iOS cannot install to the home
+screen. Open the URL, tap the Share button, then *Add to Home Screen*.
+
+Both ask for camera and microphone the first time a mode is picked, not on
+load, and the installed app has its own permission grants: allowing them in the
+browser does not carry over, so expect to grant them once more in the installed
+copy.
+
+The icons are generated rather than drawn, by `npm run icons`, so they cannot
+drift from the palette. Run it after changing a brand colour.
+
 ## Deploying to Replit
 
 The repo carries a `.replit` that sets it up as an autoscale deployment: the
@@ -125,6 +160,9 @@ Three things worth knowing before you rely on it:
 | `src/app/api/avatar/route.ts` | `GET /api/avatar` hands the browser the app id, avatar id and a session token, or `available: false`. |
 | `src/lib/avatar.ts` | Loads and drives AvatarKit in Direct Mode. Every failure path lands on voice-only, named, logged, and shown as a dev note. |
 | `src/lib/theme.ts` | Light or dark, light by default. The system setting is deliberately not consulted. |
+| `src/app/manifest.ts` | The web app manifest. Name, colours, icons, standalone display. |
+| `public/sw.js` | The service worker. Caches the shell and static assets; never touches `/api`. |
+| `scripts/make-icons.mjs` | Draws the app icons from the palette, including the maskable and Apple ones. |
 | `src/lib/pcm.ts` | The coach's mp3 to mono PCM16 for the motion server. The float-to-PCM half is pure and tested. |
 | `src/components/room/Stage.tsx` | Coach centre, self-view as a corner picture that takes half the stage during a rehearsal, call controls over both. |
 | `src/lib/speech-text.ts` | Pure sentence-chunking and speech-sanitising helpers, kept testable. |

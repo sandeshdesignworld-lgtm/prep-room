@@ -199,7 +199,7 @@ export default function Composer({
                     aria-pressed={micMode === opt.id}
                     title={opt.hint}
                     className={[
-                      "px-2 py-0.5 text-[11px] font-medium transition-colors",
+                      "flex h-8 items-center px-3 text-[11px] font-medium transition-colors",
                       micMode === opt.id
                         ? "bg-blue/12 text-ink"
                         : "bg-card text-ink-3 hover:bg-fill",
@@ -220,7 +220,7 @@ export default function Composer({
                       : "You send each turn yourself"
                   }
                   className={[
-                    "rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    "flex h-8 items-center rounded-full border px-3 text-[11px] font-medium transition-colors",
                     autoSend
                       ? "border-blue bg-blue/12 text-ink"
                       : "hairline bg-card text-ink-3 hover:bg-fill",

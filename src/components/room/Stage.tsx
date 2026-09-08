@@ -54,7 +54,12 @@ const STAGE_VOICE_ONLY = [
 ].join(" ");
 
 /** Split for a rehearsal it holds two panes, so it is allowed to be wider. */
-const STAGE_SPLIT = "mx-auto w-full max-w-full md:max-h-[min(100%,36rem)]";
+/**
+ * Split for a rehearsal it holds two panes, so it is allowed to be wider, and
+ * on a phone it has to be taller: two panes sharing 42vh leaves each of them
+ * about the height of a bus ticket, with the pills sitting on the controls.
+ */
+const STAGE_SPLIT = "mx-auto w-full max-w-full !h-[58vh] md:!h-auto md:max-h-[min(100%,36rem)]";
 
 function CameraIcon({ on }: { on: boolean }) {
   return (

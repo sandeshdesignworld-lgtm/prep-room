@@ -34,7 +34,7 @@ const PILL_ORDER = ["eyeContact", "posture", "steady", "smile"] as const;
 function Pill({ label, status }: { label: string; status: SignalStatus }) {
   return (
     <span
-      className="flex items-center gap-1.5 rounded-full bg-card/92 px-2.5 py-1 text-xs font-medium text-ink shadow-sm backdrop-blur-sm"
+      className="flex items-center gap-1 rounded-full bg-card/92 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm backdrop-blur-sm sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-xs"
       // Screen readers get the state in words; the dot alone would be colour-only.
       aria-label={`${label}: ${status === "good" ? "holding" : "worth a look"}`}
     >
@@ -97,7 +97,7 @@ export default function SelfView({
       {/* The live read. Absent entirely while it's resting, which is any time
           outside a rehearsal. */}
       {live && read && (
-        <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1.5">
+        <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1 sm:gap-1.5">
           {PILL_ORDER.map((key) => (
             <Pill key={key} label={PILL_LABEL[key]} status={read[key]} />
           ))}
