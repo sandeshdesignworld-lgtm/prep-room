@@ -22,6 +22,7 @@ import {
   type Sample,
   type StatusGate,
 } from "./signals-math";
+import { allowAgainHint, INSECURE_MESSAGE, isSecure } from "./secure";
 
 /**
  * Reads delivery signals from the webcam, in the browser, and never anywhere
@@ -119,17 +120,35 @@ export type CaptureStatus =
   | "running"
   | "denied"
   | "unavailable"
+  | "insecure"
   | "failed";
 
 /** Off, loading the models, or actually reading. */
 export type AnalysisState = "off" | "loading" | "on";
 
-export const CAPTURE_MESSAGE: Record<Exclude<CaptureStatus, "idle" | "running">, string> = {
-  starting: "Warming up the camera…",
-  denied: "Camera access was blocked. Practice still works. You just won't get delivery notes.",
-  unavailable: "No camera available, so there won't be delivery notes. Everything else works.",
-  failed: "The camera couldn't start. Practice still works without it.",
-};
+/**
+ * What to say about a camera that is not running. Read at render time rather
+ * than held in a constant, because the advice for getting the camera back
+ * depends on whether this is a browser tab or an installed app.
+ */
+export function captureMessage(status: CaptureStatus): string {
+  switch (status) {
+    case "starting":
+      return "Warming up the camera…";
+    case "denied":
+      return `Your browser is blocking the camera. ${allowAgainHint("camera")} Everything else works without it, and you can still type or talk to your coach.`;
+    case "unavailable":
+      return "No camera on this device, so there will be no delivery notes. Everything else works, and you can still type or talk to your coach.";
+    case "insecure":
+      // Not the same thing as absent hardware, and worth separating: the phone
+      // has a camera, the page just is not on an origin allowed to ask for it.
+      return INSECURE_MESSAGE;
+    case "failed":
+      return "The camera could not start. Another app may be using it, so close that and try again. Practice still works without it, and you can talk or type to your coach.";
+    default:
+      return "";
+  }
+}
 
 interface Landmarkers {
   face: { detectForVideo: (v: HTMLVideoElement, t: number) => FaceResult; close(): void };
@@ -264,7 +283,11 @@ export function useSignalCapture() {
 
   const startCamera = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setStatus("unavailable");
+      // On http the API is not refused, it is simply absent, which is
+      // indistinguishable from a laptop with no webcam unless we check.
+      const why = isSecure() ? "unavailable" : "insecure";
+      console.error(`[Prime AI signals] no camera API available (${why}).`);
+      setStatus(why);
       return;
     }
     const runId = ++cameraRunRef.current;
@@ -278,8 +301,22 @@ export function useSignalCapture() {
         audio: false,
       });
     } catch (err) {
+      // Phones distinguish these, and so must we: "allow the camera" and "no
+      // camera here" send the user to different places, and a camera another
+      // app is holding is neither. Anything unrecognised is treated as a
+      // failure rather than absent hardware, because claiming a phone has no
+      // camera is the one answer that is almost certainly wrong.
       const name = err instanceof DOMException ? err.name : "";
-      setStatus(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "unavailable");
+      console.error("[Prime AI signals] the camera was refused or unavailable.", name, err);
+      setStatus(
+        name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
+          ? "denied"
+          : name === "NotFoundError" ||
+              name === "DevicesNotFoundError" ||
+              name === "OverconstrainedError"
+            ? "unavailable"
+            : "failed",
+      );
       return;
     }
     if (cameraRunRef.current !== runId) {

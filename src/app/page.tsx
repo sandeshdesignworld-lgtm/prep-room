@@ -21,6 +21,7 @@ import {
   subscribeProfile,
   subscribeSessions,
 } from "@/lib/storage";
+import { unlockAudio } from "@/lib/audio-unlock";
 import type { ModeId, Session } from "@/lib/types";
 
 export default function Home() {
@@ -75,6 +76,11 @@ export default function Home() {
   }
 
   function open(next: Session) {
+    // The other way into the room, and it is a tap too. Without this, reopening
+    // a conversation from History gives a coach with no voice, because the one
+    // gesture that could have unlocked audio was spent on the home screen the
+    // user never saw.
+    unlockAudio();
     setOpened(next);
     // Opening a specific thread is itself the choice the home screen asks for.
     setEntered(next.mode);

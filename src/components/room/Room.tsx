@@ -10,10 +10,11 @@ import { DIFFICULTIES, DIFFICULTY_LABEL, DIFFICULTY_NOTE } from "@/lib/scenario"
 import { getMode } from "@/lib/modes";
 import { useSpeaker } from "@/lib/speech";
 import { useAvatar } from "@/lib/avatar";
+import { useAudioUnlocked } from "@/lib/audio-unlock";
 import { useVoiceLoop, type MicMode } from "@/lib/voice-loop";
 import { joinSpoken } from "@/lib/speech-text";
 import {
-  CAPTURE_MESSAGE,
+  captureMessage,
   detailSignals,
   downsample,
   summariseSignals,
@@ -158,6 +159,15 @@ export default function Room({
   // Whichever half is actually making the sound. Barge-in reads this, and it
   // has to be true for both or talking over the avatar wouldn't stop it.
   const coachSpeaking = speakerSpeaking || avatar.speaking;
+
+  /**
+   * Safari refused the unlock, or the room was opened without going through
+   * the home screen. Either way the coach cannot make a sound until someone
+   * taps something, so the room asks for one tap rather than being silent and
+   * leaving the user to wonder.
+   */
+  const audio = useAudioUnlocked();
+  const needsSoundTap = speakOn && speakSupported && !audio.ready;
 
   /**
    * The live page shows what the coach said only when it cannot say it. A coach
@@ -717,7 +727,7 @@ export default function Room({
       : "Coach · live";
 
   const cameraMessage = cameraOn
-    ? (CAPTURE_MESSAGE[captureStatus as keyof typeof CAPTURE_MESSAGE] ?? "")
+    ? captureMessage(captureStatus)
     : "Camera off. The coach still hears you, and there'll be no delivery notes.";
 
   const restingNote =
@@ -728,6 +738,45 @@ export default function Room({
         : stage === "off"
           ? "Reads while you rehearse"
           : "Resting";
+
+  // A camera that was refused explains itself in the panel, not in the self-view.
+  // Outside a rehearsal that view is a 128px corner tile: it has room for a grey
+  // dot and nothing else, so on a phone a denied camera used to read as a dead
+  // square. During a rehearsal the view is half the stage and carries the words
+  // itself, which is why this stands down then.
+  const cameraTrouble =
+    cameraOn &&
+    !live &&
+    (captureStatus === "denied" ||
+      captureStatus === "unavailable" ||
+      captureStatus === "insecure" ||
+      captureStatus === "failed")
+      ? cameraMessage
+      : null;
+
+  const cameraNote = cameraTrouble ? (
+    <div className="rounded-xl border border-amber/40 bg-amber/8 px-3.5 py-3">
+      <p className="text-sm leading-relaxed text-ink">{cameraTrouble}</p>
+    </div>
+  ) : null;
+
+  const soundPrompt = needsSoundTap ? (
+    <button
+      type="button"
+      onClick={audio.unlock}
+      className="flex w-full items-center gap-2 rounded-xl border border-blue/40 bg-blue/8 px-3.5 py-3 text-left transition-colors hover:bg-blue/12"
+    >
+      <span aria-hidden className="text-blue-strong">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" strokeWidth={1.8}>
+          <path d="M4 9v6h3.5L12 19V5L7.5 9H4Z" stroke="currentColor" strokeLinejoin="round" />
+          <path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10" stroke="currentColor" strokeLinecap="round" />
+        </svg>
+      </span>
+      <span className="text-sm leading-relaxed text-ink">
+        Tap to turn your coach&apos;s voice on. Phones keep sound off until you ask.
+      </span>
+    </button>
+  ) : null;
 
   const panelExtras = (
     <>
@@ -847,6 +896,10 @@ export default function Room({
           </button>
         </div>
       )}
+
+      {cameraNote}
+
+      {soundPrompt}
 
       {error && (
         <div className="rounded-xl border border-red/40 bg-red/8 px-3 py-2.5">

@@ -1,5 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { unlockAudio } from "@/lib/audio-unlock";
+import { INSECURE_MESSAGE, isSecure } from "@/lib/secure";
 import { MODES, MODE_ORDER } from "@/lib/modes";
 import type { ModeId } from "@/lib/types";
 
@@ -68,6 +71,28 @@ export default function Home({
   onPick: (mode: ModeId) => void;
   goal?: string;
 }) {
+  // Read from the browser rather than written into state: the server has no
+  // idea whether the page is on a secure origin, and this never changes for
+  // the life of the page, so there is nothing to subscribe to.
+  const secure = useSyncExternalStore(
+    () => () => {},
+    isSecure,
+    () => true
+  );
+
+  /**
+   * The one tap that starts everything.
+   *
+   * The audio unlock happens here, first, synchronously, before any state is
+   * set or any promise is awaited. This is the only moment Safari counts as a
+   * gesture, and spending it on anything else means the coach has no voice for
+   * the rest of the session. Everything after this can take its time.
+   */
+  function pick(mode: ModeId) {
+    unlockAudio();
+    onPick(mode);
+  }
+
   return (
     <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-5 py-10 sm:py-14">
       <div className="fade-up">
@@ -82,6 +107,13 @@ export default function Home({
           the actual words to use, and then run it with you out loud.
         </p>
 
+        {!secure && (
+          <div className="mt-6 rounded-2xl border border-amber/50 bg-amber/10 p-4">
+            <p className="text-sm font-semibold text-ink">Camera and microphone are unavailable</p>
+            <p className="mt-1 text-sm leading-relaxed text-ink-2">{INSECURE_MESSAGE}</p>
+          </div>
+        )}
+
         <div className="mt-8 space-y-3">
           {MODE_ORDER.map((id) => {
             const mode = MODES[id];
@@ -89,7 +121,7 @@ export default function Home({
               <button
                 key={id}
                 type="button"
-                onClick={() => onPick(id)}
+                onClick={() => pick(id)}
                 className={[
                   "group block w-full rounded-2xl border bg-card p-4 text-left transition-colors sm:p-5",
                   "hairline",

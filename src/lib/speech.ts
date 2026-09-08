@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { firstChunkBoundary, forSpeaking, lastSentenceBoundary } from "./speech-text";
 import type { AvatarSink } from "./avatar";
+import { sharedAudio } from "./audio-unlock";
+import { allowAgainHint } from "./secure";
 
 /**
  * Web Speech API wrappers. Both halves feature-detect and degrade to typing, * Firefox has no SpeechRecognition at all, and iOS Safari is inconsistent, so
@@ -71,15 +73,18 @@ export function useSpeechSupport() {
 
 export type DictationError = "denied" | "no-speech" | "network" | "failed";
 
-const ERROR_COPY: Record<DictationError, string> = {
-  denied: "Your browser is blocking the mic. Allow it in the address bar, or just type.",
-  "no-speech": "Didn't catch anything. Try again, or type it.",
-  network: "Speech recognition needs a connection right now. You can type instead.",
-  failed: "The mic stopped working. You can type instead.",
-};
-
 export function dictationErrorCopy(err: DictationError): string {
-  return ERROR_COPY[err];
+  switch (err) {
+    case "denied":
+      // Composed at call time: an installed app has no address bar to point at.
+      return `Your browser is blocking the mic. ${allowAgainHint("mic")} You can type instead in the meantime.`;
+    case "no-speech":
+      return "Didn't catch anything. Try again, or type it.";
+    case "network":
+      return "Speech recognition needs a connection right now. You can type instead.";
+    default:
+      return "The mic stopped working. You can type instead.";
+  }
 }
 
 /**
@@ -437,6 +442,10 @@ export function useSpeaker({
     if (audio) {
       audio.pause();
       if (audio.src.startsWith("blob:")) URL.revokeObjectURL(audio.src);
+      // Never dropped or replaced, only stopped. Losing this element on iOS
+      // means losing the unlock with it.
+      audio.removeAttribute("src");
+      audio.load();
       audioRef.current = null;
     }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -477,7 +486,18 @@ export function useSpeaker({
         return;
       }
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      // The shared element, not a new one. iOS unlocks an audio element
+      // individually, by having play() called on it during a gesture, and a
+      // fresh element built here in a promise chain after a fetch has had no
+      // gesture and never will. Reusing the one unlocked on the first tap is
+      // the whole reason the coach can speak on an iPhone.
+      const audio = sharedAudio();
+      if (!audio) {
+        URL.revokeObjectURL(url);
+        await speakInBrowser(clip.text);
+        return;
+      }
+      audio.src = url;
       audioRef.current = audio;
       try {
         await audio.play();
@@ -497,6 +517,10 @@ export function useSpeaker({
         // Autoplay refused, or a decode error. Say it the plain way instead.
         await speakInBrowser(clip.text);
       } finally {
+        // Detached rather than discarded: the element is shared and has to stay
+        // unlocked for the next sentence.
+        audio.onended = null;
+        audio.onerror = null;
         URL.revokeObjectURL(url);
         if (audioRef.current === audio) audioRef.current = null;
       }
