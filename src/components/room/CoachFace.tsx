@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import AvatarBoundary from "./AvatarBoundary";
 import type { AvatarStatus } from "@/lib/avatar";
+import BrandMark from "@/components/app/BrandMark";
 
 /**
  * The coach, centre stage. Present from the first message: you land in a room
@@ -35,9 +36,9 @@ function Monogram({ speaking }: { speaking: boolean }) {
       )}
       <span
         aria-hidden
-        className="relative flex h-20 w-20 items-center justify-center rounded-full bg-coral/12 text-xl font-semibold tracking-tight text-coral"
+        className="relative flex h-20 w-20 items-center justify-center rounded-full bg-coral/12"
       >
-        P
+        <BrandMark size={44} />
       </span>
     </span>
   );

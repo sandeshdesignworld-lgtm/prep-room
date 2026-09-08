@@ -16,7 +16,11 @@
  * changing their name.
  */
 
-const VERSION = "v1";
+// Bumped when a cached file changes behind a URL that does not. The icon
+// paths are stable but the artwork behind them is not, so leaving this alone
+// would serve everyone who already installed the app the previous logo,
+// indefinitely, with no way for them to know why.
+const VERSION = "v2";
 const SHELL = `prime-ai-shell-${VERSION}`;
 const ASSETS = `prime-ai-assets-${VERSION}`;
 

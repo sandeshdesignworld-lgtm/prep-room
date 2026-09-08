@@ -5,6 +5,7 @@ import { unlockAudio } from "@/lib/audio-unlock";
 import { INSECURE_MESSAGE, isSecure } from "@/lib/secure";
 import { MODES, MODE_ORDER } from "@/lib/modes";
 import type { ModeId } from "@/lib/types";
+import BrandMark from "./BrandMark";
 
 /**
  * Where every session starts.
@@ -96,7 +97,10 @@ export default function Home({
   return (
     <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-5 py-10 sm:py-14">
       <div className="fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
+        <div className="flex items-center gap-2">
+          <BrandMark size={28} />
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
+        </div>
 
         <h1 className="mt-3 font-serif text-[2rem] leading-[1.15] font-semibold text-ink sm:text-[2.5rem]">
           What are we working on today?

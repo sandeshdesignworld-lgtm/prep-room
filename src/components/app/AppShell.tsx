@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTheme } from "@/lib/theme";
+import BrandMark from "./BrandMark";
 
 export type View = "advisor" | "history" | "progress" | "data";
 
@@ -146,12 +147,8 @@ export default function AppShell({
         aria-label="Sections"
         className="hidden shrink-0 flex-col items-center gap-1 border-r bg-card px-2.5 py-4 hairline md:flex md:w-16"
       >
-        <span
-          aria-hidden
-          className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-coral text-sm font-semibold text-on-accent"
-          title="Prime AI"
-        >
-          P
+        <span className="mb-3 flex h-9 w-9 items-center justify-center" title="Prime AI">
+          <BrandMark size={30} />
         </span>
         <NavButton label="Home" active={homeActive} onClick={onHome}>
           <HomeIcon />

@@ -1,6 +1,7 @@
 "use client";
 
 import Button from "@/components/ui/Button";
+import BrandMark from "@/components/app/BrandMark";
 
 const PROMISES = [
   {
@@ -25,7 +26,10 @@ export default function Welcome({ onAccept }: { onAccept: () => void }) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-5 py-12">
       <div className="fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
+        <div className="flex items-center gap-2">
+          <BrandMark size={28} />
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-blue-strong">Prime AI</p>
+        </div>
         <h1 className="mt-3 text-3xl leading-tight font-semibold text-ink">
           A place to practise the conversation before you have it.
         </h1>
