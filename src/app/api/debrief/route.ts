@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic, describeError, MODEL } from "@/lib/anthropic";
+import { describeFailure, parseJson } from "@/lib/llm";
+import "@/lib/providers";
 import { debriefSystemPrompt, deliveryAnalysisSystemPrompt } from "@/lib/prompts";
 import { isModeId } from "@/lib/modes";
 import { clampText, sanitiseTurns } from "@/lib/api";
 import { readScenario } from "@/lib/scenario";
-import { cleanLine, parseJsonLoose } from "@/lib/json";
+import { cleanLine } from "@/lib/json";
 import type { Debrief, DebriefRequest, ModeId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,11 @@ const AnalysisSchema = z.object({
 type Analysis = z.infer<typeof AnalysisSchema>;
 
 const NO_ANALYSIS: Analysis = { noticed: [], cues: [] };
+
+/** Described in words for providers that cannot be handed the schema itself. */
+const DEBRIEF_HINT =
+  '{ "score": 1-10 integer, "verdict": "2-4 words", "strengths": ["..."], "improvements": ["..."], "stronger_line": ["..."] }';
+const ANALYSIS_HINT = '{ "noticed": ["..."], "cues": ["..."] }';
 
 export async function POST(request: Request) {
   let body: DebriefRequest;
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
     };
     return Response.json(debrief, { headers: { "cache-control": "no-store" } });
   } catch (err) {
-    const { status, message } = describeError(err);
+    const { status, message } = describeFailure(err);
     console.error("[/api/debrief]", err);
     return Response.json({ error: message }, { status });
   }
@@ -123,18 +128,19 @@ async function writeDebrief(opts: {
     ? `${opts.transcript}\n\nDelivery-signal summary:\n${opts.signalSummary}`
     : opts.transcript;
 
-  const response = await anthropic().messages.parse({
-    model: MODEL,
-    max_tokens: 2000,
-    system: debriefSystemPrompt({
-      mode: opts.mode,
-      hasSignals: opts.signalSummary.length > 0,
-    }),
-    messages: [{ role: "user", content }],
-    output_config: { format: zodOutputFormat(DebriefSchema) },
-  });
-
-  return response.parsed_output ?? fallbackParse(response, DebriefSchema);
+  return parseJson(
+    {
+      system: debriefSystemPrompt({
+        mode: opts.mode,
+        hasSignals: opts.signalSummary.length > 0,
+      }),
+      messages: [{ role: "user", content }],
+      maxTokens: 2000,
+    },
+    DebriefSchema,
+    DEBRIEF_HINT,
+    "/api/debrief",
+  );
 }
 
 /**
@@ -148,34 +154,19 @@ async function analyseDelivery(opts: {
   detail: string;
 }): Promise<Analysis> {
   try {
-    const response = await anthropic().messages.parse({
-      model: MODEL,
-      max_tokens: 2000,
-      system: deliveryAnalysisSystemPrompt({ mode: opts.mode }),
-      messages: [
-        {
-          role: "user",
-          content: `${opts.transcript}\n\n${opts.detail}`,
-        },
-      ],
-      output_config: { format: zodOutputFormat(AnalysisSchema) },
-    });
-
-    return response.parsed_output ?? fallbackParse(response, AnalysisSchema) ?? NO_ANALYSIS;
+    const parsed = await parseJson(
+      {
+        system: deliveryAnalysisSystemPrompt({ mode: opts.mode }),
+        messages: [{ role: "user", content: `${opts.transcript}\n\n${opts.detail}` }],
+        maxTokens: 2000,
+      },
+      AnalysisSchema,
+      ANALYSIS_HINT,
+      "/api/debrief delivery",
+    );
+    return parsed ?? NO_ANALYSIS;
   } catch (err) {
     console.error("[/api/debrief] delivery analysis failed", err);
     return NO_ANALYSIS;
   }
-}
-
-function fallbackParse<T extends z.ZodType>(
-  response: { content: Array<{ type: string }> },
-  schema: T
-): z.infer<T> | null {
-  const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  const result = schema.safeParse(parseJsonLoose<unknown>(text));
-  return result.success ? result.data : null;
 }

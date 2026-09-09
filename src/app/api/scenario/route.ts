@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic, describeError, MODEL } from "@/lib/anthropic";
+import { describeFailure, parseJson } from "@/lib/llm";
+import "@/lib/providers";
 import { scenarioSystemPrompt } from "@/lib/prompts";
 import { isModeId } from "@/lib/modes";
 import { sanitiseTurns } from "@/lib/api";
 import { isDifficulty } from "@/lib/scenario";
-import { parseJsonLoose } from "@/lib/json";
 import type { Scenario, ScenarioRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +14,9 @@ const ScenarioSchema = z.object({
   situation: z.string(),
   opening: z.string(),
 });
-type ScenarioDraft = z.infer<typeof ScenarioSchema>;
+/** Described in words for providers that cannot be handed the schema itself. */
+const SCENARIO_HINT =
+  '{ "counterpart": "who the coach plays", "situation": "one or two sentences", "opening": "their first line" }';
 
 export async function POST(request: Request) {
   let body: ScenarioRequest;
@@ -36,22 +37,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await anthropic().messages.parse({
-      model: MODEL,
-      max_tokens: 1000,
-      system: scenarioSystemPrompt({ mode: body.mode, difficulty }),
-      messages: [
-        ...messages,
-        {
-          role: "user",
-          content:
-            "Set up the practice scenario for the situation we just discussed. Return only the scenario.",
-        },
-      ],
-      output_config: { format: zodOutputFormat(ScenarioSchema) },
-    });
-
-    const draft = response.parsed_output ?? fallbackParse(response);
+    const draft = await parseJson(
+      {
+        system: scenarioSystemPrompt({ mode: body.mode, difficulty }),
+        messages: [
+          ...messages,
+          {
+            role: "user",
+            content:
+              "Set up the practice scenario for the situation we just discussed. Return only the scenario.",
+          },
+        ],
+        maxTokens: 1000,
+      },
+      ScenarioSchema,
+      SCENARIO_HINT,
+      "/api/scenario",
+    );
     if (!draft?.counterpart?.trim()) {
       return Response.json({ error: "Couldn't set up the practice run. Try again." }, { status: 502 });
     }
@@ -64,19 +66,8 @@ export async function POST(request: Request) {
     };
     return Response.json(scenario, { headers: { "cache-control": "no-store" } });
   } catch (err) {
-    const { status, message } = describeError(err);
+    const { status, message } = describeFailure(err);
     console.error("[/api/scenario]", err);
     return Response.json({ error: message }, { status });
   }
-}
-
-/** Structured outputs should make this unreachable; it's here so a hiccup isn't fatal. */
-function fallbackParse(response: { content: Array<{ type: string }> }): ScenarioDraft | null {
-  const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  const parsed = parseJsonLoose<unknown>(text);
-  const result = ScenarioSchema.safeParse(parsed);
-  return result.success ? result.data : null;
 }

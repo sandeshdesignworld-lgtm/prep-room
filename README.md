@@ -110,7 +110,8 @@ container.
 
    | Secret | Without it |
    |---|---|
-   | `ANTHROPIC_API_KEY` | The coach cannot answer at all. This one is required. |
+   | `OPENAI_API_KEY` | The coach falls back to Anthropic. |
+   | `ANTHROPIC_API_KEY` | The coach falls back to OpenAI. At least ONE of these two is required. |
    | `SARVAM_API_KEY` | The coach types instead of speaking, and has no avatar. |
    | `SPATIUS_APP_ID`, `SPATIUS_API_KEY`, `SPATIUS_AVATAR_ID` | The coach speaks with a monogram rather than a face. |
 

@@ -1,4 +1,5 @@
-import { anthropic, describeError, MODEL } from "@/lib/anthropic";
+import { describeFailure, streamText } from "@/lib/llm";
+import "@/lib/providers";
 import { advisorSystemPrompt } from "@/lib/prompts";
 import { isModeId } from "@/lib/modes";
 import { clampText, sanitiseTurns, textStreamResponse } from "@/lib/api";
@@ -25,19 +26,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stream = anthropic().messages.stream({
-      model: MODEL,
-      max_tokens: 2000,
-      system: advisorSystemPrompt({
-        mode: body.mode,
-        about: clampText(body.about),
-        goal: clampText(body.goal),
-      }),
-      messages,
-    });
+    const { stream } = await streamText(
+      {
+        system: advisorSystemPrompt({
+          mode: body.mode,
+          about: clampText(body.about),
+          goal: clampText(body.goal),
+        }),
+        messages,
+        maxTokens: 2000,
+      },
+      "/api/advisor",
+    );
     return textStreamResponse(stream, request, "/api/advisor");
   } catch (err) {
-    const { status, message } = describeError(err);
+    const { status, message } = describeFailure(err);
     console.error("[/api/advisor]", err);
     return Response.json({ error: message }, { status });
   }

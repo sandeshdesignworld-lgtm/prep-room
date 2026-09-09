@@ -1,4 +1,5 @@
-import { anthropic, describeError, MODEL } from "@/lib/anthropic";
+import { describeFailure, streamText } from "@/lib/llm";
+import "@/lib/providers";
 import { roleplaySystemPrompt } from "@/lib/prompts";
 import { isModeId } from "@/lib/modes";
 import { sanitiseTurns, textStreamResponse } from "@/lib/api";
@@ -30,16 +31,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stream = anthropic().messages.stream({
-      model: MODEL,
-      // Spoken turns are short. A low ceiling also discourages monologuing.
-      max_tokens: 400,
-      system: roleplaySystemPrompt({ mode: body.mode, scenario }),
-      messages,
-    });
+    const { stream } = await streamText(
+      {
+        system: roleplaySystemPrompt({ mode: body.mode, scenario }),
+        messages,
+        // Spoken turns are short. A low ceiling also discourages monologuing.
+        maxTokens: 400,
+      },
+      "/api/roleplay",
+    );
     return textStreamResponse(stream, request, "/api/roleplay");
   } catch (err) {
-    const { status, message } = describeError(err);
+    const { status, message } = describeFailure(err);
     console.error("[/api/roleplay]", err);
     return Response.json({ error: message }, { status });
   }
