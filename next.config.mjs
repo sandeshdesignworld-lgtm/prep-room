@@ -19,7 +19,12 @@ const nextConfig = {
   // Replit's preview iframe reaches the dev server through a proxied origin.
   // Without this, Next rejects the HMR handshake and the preview can remain
   // stuck on the server-rendered shell.
-  allowedDevOrigins: ["127.0.0.1", "localhost", "*.replit.dev"],
+  allowedDevOrigins: [
+    "127.0.0.1",
+    "localhost",
+    "*.replit.dev",
+    ...(process.env.REPLIT_DEV_DOMAIN ? [process.env.REPLIT_DEV_DOMAIN] : []),
+  ],
 };
 
 export default withAvatarkit(nextConfig);

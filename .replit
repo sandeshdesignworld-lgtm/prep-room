@@ -14,10 +14,13 @@ modules = ["nodejs-22"]
 
 run = ["npm", "run", "dev"]
 
-# Next serves on $PORT, which Replit sets. 80 is what the outside world sees.
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -30,3 +33,27 @@ NEXT_TELEMETRY_DISABLED = "1"
 
 [nix]
 channel = "stable-24_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev -- -p 5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
