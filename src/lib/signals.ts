@@ -22,7 +22,8 @@ import {
   type Sample,
   type StatusGate,
 } from "./signals-math";
-import { allowAgainHint, INSECURE_MESSAGE, isSecure } from "./secure";
+import { allowAgainHint, INSECURE_MESSAGE, isSecure, logMediaEnvironment } from "./secure";
+import { classifyMediaError, errorName } from "./media-errors";
 
 /**
  * Reads delivery signals from the webcam, in the browser, and never anywhere
@@ -120,6 +121,8 @@ export type CaptureStatus =
   | "running"
   | "denied"
   | "unavailable"
+  | "busy"
+  | "mismatch"
   | "insecure"
   | "failed";
 
@@ -139,6 +142,13 @@ export function captureMessage(status: CaptureStatus): string {
       return `Your browser is blocking the camera. ${allowAgainHint("camera")} Everything else works without it, and you can still type or talk to your coach.`;
     case "unavailable":
       return "No camera on this device, so there will be no delivery notes. Everything else works, and you can still type or talk to your coach.";
+    case "busy":
+      // Present and permitted, just held by something else. Telling this user
+      // to change a permission would send them somewhere that looks correct
+      // and fixes nothing.
+      return "Another app is using the camera. Close it, then tap the camera button to try again. Everything else works meanwhile.";
+    case "mismatch":
+      return "This camera could not give us a usable picture, so there will be no delivery notes. Everything else works, and you can still type or talk to your coach.";
     case "insecure":
       // Not the same thing as absent hardware, and worth separating: the phone
       // has a camera, the page just is not on an origin allowed to ask for it.
@@ -281,6 +291,35 @@ export function useSignalCapture() {
 
   /* ------------------------------ the camera ------------------------------ */
 
+  /**
+   * Put an opened stream on screen. Split out of startCamera so the relaxed
+   * retry lands in exactly the same place as the first attempt rather than
+   * duplicating the play/teardown dance.
+   */
+  const attach = useCallback(
+    async (stream: MediaStream, runId: number) => {
+      const video = videoRef.current;
+      if (!video) {
+        teardown();
+        setStatus("failed");
+        return;
+      }
+      video.srcObject = stream;
+      try {
+        await video.play();
+      } catch (err) {
+        console.error("[Prime AI media] the stream opened but would not play.", err);
+        teardown();
+        setStatus("failed");
+        return;
+      }
+      if (cameraRunRef.current !== runId) return;
+      console.info("[Prime AI media] camera running.");
+      setStatus("running");
+    },
+    [teardown],
+  );
+
   const startCamera = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       // On http the API is not refused, it is simply absent, which is
@@ -293,29 +332,70 @@ export function useSignalCapture() {
     const runId = ++cameraRunRef.current;
     setStatus("starting");
 
+    // Once per start, before we ask. If the request is refused without ever
+    // showing a prompt, this line is what says why.
+    logMediaEnvironment("startCamera");
+
+    /**
+     * Ask for the camera. Nothing is inferred about permission beforehand:
+     * we do not consult navigator.permissions, we do not guess from the
+     * display mode, we call getUserMedia and let the browser decide. It is
+     * the only thing that can show a prompt, and the only thing that knows
+     * the answer.
+     */
+    const ask = (constraints: MediaStreamConstraints) =>
+      navigator.mediaDevices.getUserMedia(constraints);
+
     let stream: MediaStream;
     try {
       // Video only. Audio belongs to speech recognition and is never touched here.
-      stream = await navigator.mediaDevices.getUserMedia({
+      stream = await ask({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: false,
       });
     } catch (err) {
-      // Phones distinguish these, and so must we: "allow the camera" and "no
-      // camera here" send the user to different places, and a camera another
-      // app is holding is neither. Anything unrecognised is treated as a
-      // failure rather than absent hardware, because claiming a phone has no
-      // camera is the one answer that is almost certainly wrong.
-      const name = err instanceof DOMException ? err.name : "";
-      console.error("[Prime AI signals] the camera was refused or unavailable.", name, err);
+      let failure = classifyMediaError(err);
+      console.error(
+        `[Prime AI media] camera refused: name=${errorName(err) || "(none)"} -> ${failure}`,
+        err,
+      );
+
+      // A camera that cannot meet our constraints is still a camera. Ask again
+      // for any video at all before telling someone their phone has none: on a
+      // phone that answer is almost always the wrong one.
+      if (failure === "mismatch") {
+        try {
+          stream = await ask({ video: true, audio: false });
+          console.info("[Prime AI media] camera opened on the relaxed retry.");
+          if (cameraRunRef.current !== runId) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          streamRef.current = stream;
+          return await attach(stream, runId);
+        } catch (retryErr) {
+          failure = classifyMediaError(retryErr);
+          console.error(
+            `[Prime AI media] relaxed retry refused too: name=${errorName(retryErr) || "(none)"} -> ${failure}`,
+            retryErr,
+          );
+        }
+      }
+
+      // ONLY a real NotAllowedError from a real request becomes "blocked, go to
+      // settings". Everything else gets its own accurate answer.
       setStatus(
-        name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
+        failure === "denied"
           ? "denied"
-          : name === "NotFoundError" ||
-              name === "DevicesNotFoundError" ||
-              name === "OverconstrainedError"
+          : failure === "absent"
             ? "unavailable"
-            : "failed",
+            : failure === "busy"
+              ? "busy"
+              : failure === "mismatch"
+                ? "mismatch"
+                : failure === "insecure"
+                  ? "insecure"
+                  : "failed",
       );
       return;
     }
@@ -325,25 +405,8 @@ export function useSignalCapture() {
       return;
     }
     streamRef.current = stream;
-
-    const video = videoRef.current;
-    if (!video) {
-      teardown();
-      setStatus("failed");
-      return;
-    }
-    video.srcObject = stream;
-    try {
-      await video.play();
-    } catch (err) {
-      console.error("[signals] camera failed to start", err);
-      teardown();
-      setStatus("failed");
-      return;
-    }
-    if (cameraRunRef.current !== runId) return;
-    setStatus("running");
-  }, [teardown]);
+    await attach(stream, runId);
+  }, [attach]);
 
   const stopCamera = useCallback(() => {
     teardown();

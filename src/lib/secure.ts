@@ -38,8 +38,55 @@ export const INSECURE_MESSAGE =
  */
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
+  // iOS only, and only true in a home-screen app. Absent in every Android browser.
   const iosStandalone = (window.navigator as { standalone?: boolean }).standalone === true;
-  return iosStandalone || window.matchMedia?.("(display-mode: standalone)").matches === true;
+  if (iosStandalone) return true;
+  // An Android Chrome TAB reports display-mode: browser, so this is false there,
+  // which is what we want: that user does have an address bar to tap. Only the
+  // address-bar-less modes count. "minimal-ui" deliberately does not: it keeps a
+  // cut-down address bar, so the padlock advice still holds.
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches === true;
+  const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches === true;
+  return standalone || fullscreen;
+}
+
+/** Which display-mode actually matched, for the on-device log. */
+export function displayMode(): string {
+  if (typeof window === "undefined" || !window.matchMedia) return "unknown";
+  for (const mode of ["standalone", "fullscreen", "minimal-ui", "browser"]) {
+    if (window.matchMedia(`(display-mode: ${mode})`).matches) return mode;
+  }
+  return "unknown";
+}
+
+/**
+ * Everything about this device that decides whether the camera can be asked
+ * for, in one line, once.
+ *
+ * Deliberately not called from isSecure() or isStandalone(): those two are read
+ * during render (one of them through useSyncExternalStore, which requires a
+ * pure snapshot), and a console call in there both spams and breaks the rules.
+ * This is called from the camera path instead, where it happens once per start.
+ */
+export function logMediaEnvironment(where: string): void {
+  if (typeof window === "undefined") return;
+  const activation = (navigator as { userActivation?: { hasBeenActive?: boolean; isActive?: boolean } })
+    .userActivation;
+  console.info(`[Prime AI media] ${where}`, {
+    secureContext: window.isSecureContext,
+    protocol: window.location.protocol,
+    host: window.location.host,
+    hasMediaDevices: hasMediaDevices(),
+    displayMode: displayMode(),
+    isStandalone: isStandalone(),
+    // Chrome on Android refuses some requests outright when the page has never
+    // been interacted with, and reports it here rather than in the error.
+    userActivation: activation
+      ? { hasBeenActive: activation.hasBeenActive, isActive: activation.isActive }
+      : "unsupported",
+    visibility: document.visibilityState,
+    userAgent: navigator.userAgent,
+  });
 }
 
 /** How to give this app the camera or the mic back, in the place it lives. */

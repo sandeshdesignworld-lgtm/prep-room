@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { firstChunkBoundary, forSpeaking, lastSentenceBoundary } from "./speech-text";
 import type { AvatarSink } from "./avatar";
 import { sharedAudio } from "./audio-unlock";
-import { allowAgainHint } from "./secure";
+import { allowAgainHint, logMediaEnvironment } from "./secure";
+import { classifyMediaError, errorName } from "./media-errors";
 
 /**
  * Web Speech API wrappers. Both halves feature-detect and degrade to typing, * Firefox has no SpeechRecognition at all, and iOS Safari is inconsistent, so
@@ -106,6 +107,11 @@ export function useDictation({
   const recognitionRef = useRef<RecognitionInstance | null>(null);
   const wantRef = useRef(false);
   const restartsRef = useRef(0);
+  /**
+   * Whether we have already tried opening the mic ourselves to raise a prompt.
+   * Once per start, so a genuinely denied mic cannot become a prompt loop.
+   */
+  const primedRef = useRef(false);
   // Kept current in an effect, not during render, so the long-lived recognition
   // handlers always call the latest callback without being re-bound.
   const onFinalRef = useRef(onFinal);
@@ -138,6 +144,7 @@ export function useDictation({
     setError(null);
     setInterim("");
     restartsRef.current = 0;
+    primedRef.current = false;
     wantRef.current = true;
 
     const begin = () => {
@@ -167,12 +174,55 @@ export function useDictation({
         // "aborted" is us calling stop(); "no-speech" happens on any pause.
         if (event.error === "aborted") return;
         if (event.error === "no-speech") return;
-        const mapped: DictationError =
-          event.error === "not-allowed" || event.error === "service-not-allowed"
-            ? "denied"
-            : event.error === "network"
-              ? "network"
-              : "failed";
+        console.warn(`[Prime AI media] recognition error: ${event.error}`);
+
+        const refused = event.error === "not-allowed" || event.error === "service-not-allowed";
+
+        /**
+         * Chrome on Android does not raise a microphone prompt of its own for
+         * the Web Speech API. If the origin has no mic permission yet it simply
+         * fails with "not-allowed", which looks exactly like a user who said no
+         * and is nothing of the kind: nobody was ever asked. Desktop Chrome
+         * does prompt, which is why this only ever showed up on a phone.
+         *
+         * So on the first refusal, open the mic ourselves. getUserMedia is the
+         * call that can actually show a prompt. If the user allows it, the
+         * permission is now on the origin and recognition works on the retry;
+         * if they refuse, THAT is a real denial and it is reported as one.
+         */
+        if (refused && !primedRef.current) {
+          primedRef.current = true;
+          logMediaEnvironment("dictation refused, priming the mic");
+          void (async () => {
+            try {
+              const primer = await navigator.mediaDevices.getUserMedia({ audio: true });
+              // The permission is what we wanted, not the stream. Hand it back
+              // at once so recognition is not fighting us for the device.
+              primer.getTracks().forEach((t) => t.stop());
+              console.info("[Prime AI media] mic granted on priming; restarting dictation.");
+              if (!wantRef.current) return;
+              restartsRef.current = 0;
+              begin();
+            } catch (err) {
+              const failure = classifyMediaError(err);
+              console.error(
+                `[Prime AI media] priming refused: name=${errorName(err) || "(none)"} -> ${failure}`,
+                err,
+              );
+              wantRef.current = false;
+              setError(failure === "absent" ? "failed" : "denied");
+              setListening(false);
+              setInterim("");
+            }
+          })();
+          return;
+        }
+
+        const mapped: DictationError = refused
+          ? "denied"
+          : event.error === "network"
+            ? "network"
+            : "failed";
         wantRef.current = false;
         setError(mapped);
         setListening(false);

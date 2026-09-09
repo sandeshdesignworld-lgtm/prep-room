@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { advanceGate, newSpeechGate, rms, type SpeechGate } from "./voice-activity";
+import { classifyMediaError, errorName } from "./media-errors";
 
 /**
  * Listens to the microphone's level, and nothing else. No transcription, no
@@ -67,9 +68,15 @@ export function useMicActivity({ enabled }: { enabled: boolean }): MicActivity {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
           video: false,
         });
-      } catch {
+      } catch (err) {
         // Denied, or no input device. Auto-send falls back to recognition
-        // timing and everything else carries on.
+        // timing and everything else carries on, so this stays non-fatal, but
+        // it no longer vanishes: a mic that is quietly refused here used to
+        // leave no trace at all, which made the mobile fault impossible to see.
+        console.warn(
+          `[Prime AI media] level meter could not open the mic: name=${errorName(err) || "(none)"} -> ${classifyMediaError(err)}`,
+          err,
+        );
         return;
       }
       if (cancelled) {

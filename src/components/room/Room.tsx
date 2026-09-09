@@ -749,6 +749,8 @@ export default function Room({
     !live &&
     (captureStatus === "denied" ||
       captureStatus === "unavailable" ||
+      captureStatus === "busy" ||
+      captureStatus === "mismatch" ||
       captureStatus === "insecure" ||
       captureStatus === "failed")
       ? cameraMessage
