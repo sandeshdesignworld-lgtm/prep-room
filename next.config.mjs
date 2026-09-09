@@ -15,6 +15,11 @@
 import { withAvatarkit } from "@spatius/avatarkit/next";
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Replit's preview iframe reaches the dev server through a proxied origin.
+  // Without this, Next rejects the HMR handshake and the preview can remain
+  // stuck on the server-rendered shell.
+  allowedDevOrigins: ["127.0.0.1", "localhost", "*.replit.dev"],
+};
 
 export default withAvatarkit(nextConfig);

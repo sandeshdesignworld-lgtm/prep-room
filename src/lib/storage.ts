@@ -91,9 +91,13 @@ export function getProfileSnapshot(): Profile | null {
   return cachedProfile;
 }
 
-/** `undefined` means "not read yet": the server and the first paint. */
-export function getProfileServerSnapshot(): undefined {
-  return undefined;
+/**
+ * Render the onboarding screen during SSR as well as on the first client
+ * render. The browser store still replaces this with the saved profile during
+ * hydration, but the app must not ship an empty page while that happens.
+ */
+export function getProfileServerSnapshot(): Profile | null {
+  return null;
 }
 
 export function subscribeSessions(listener: () => void): () => void {

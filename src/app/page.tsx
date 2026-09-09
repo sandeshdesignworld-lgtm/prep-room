@@ -25,9 +25,9 @@ import { unlockAudio } from "@/lib/audio-unlock";
 import type { ModeId, Session } from "@/lib/types";
 
 export default function Home() {
-  // The profile lives in localStorage, which doesn't exist during SSR. Subscribing
-  // to it keeps the first paint hydration-safe: `undefined` until the browser
-  // has actually been read, so we never flash the wrong screen.
+  // The profile lives in localStorage, which doesn't exist during SSR. The
+  // stable null server snapshot renders onboarding immediately, then the
+  // browser snapshot replaces it with any saved profile during hydration.
   const profile = useSyncExternalStore(
     subscribeProfile,
     getProfileSnapshot,

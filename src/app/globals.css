@@ -1,4 +1,12 @@
-@import "tailwindcss";
+/*
+ * Keep Tailwind's content scan scoped to the application source. Its default
+ * auto-detection also walks workspace tooling/cache directories, where the
+ * Tailwind package itself contains placeholder examples such as `url(...)`.
+ * Those examples can be interpreted as arbitrary utilities and make Turbopack
+ * try to resolve `...` as a real module during the build.
+ */
+@import "tailwindcss" source(none);
+@source "../";
 
 /*
  * Dark mode is class-driven and OPT-IN. Crisp White is the app, and it is what

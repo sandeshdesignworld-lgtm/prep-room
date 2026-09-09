@@ -1,0 +1,1 @@
+- [Tailwind source scanning](tailwind-source-scanning.md) — scope Tailwind v4 scanning to app source so workspace caches cannot become CSS candidates.
