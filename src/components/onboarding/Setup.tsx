@@ -34,7 +34,10 @@ export default function Setup({ onDone }: { onDone: (profile: Profile) => void }
       about: about.trim(),
       goal: goal.trim(),
       inputPreference,
-      speakReplies: inputPreference === "voice" && support.speaking,
+      // How the user answers is independent of whether the coach speaks back.
+      // Keeping this on by default is what makes the avatar useful for people
+      // who choose to type their own turns.
+      speakReplies: support.speaking,
       // On by default: the whole point of talking is not reaching for a button.
       autoSend: true,
       // Left unset on purpose. Hands-free is the default behaviour, and leaving

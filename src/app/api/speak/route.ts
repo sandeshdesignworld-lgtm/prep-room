@@ -10,7 +10,7 @@ const MAX_CHARS = 3000;
 export async function GET() {
   // The client asks once on mount so it knows whether to use a server TTS
   // engine or fall back to speechSynthesis, without ever seeing a key.
-  const provider = openaiTtsConfigured() ? "openai" : sarvamConfigured() ? "sarvam" : null;
+  const provider = sarvamConfigured() ? "sarvam" : openaiTtsConfigured() ? "openai" : null;
   return Response.json(
     {
       available: provider !== null,
@@ -43,14 +43,12 @@ export async function POST(request: Request) {
   const format: SpeechFormat = body.format === "pcm" ? "pcm" : "mp3";
 
   try {
-    /**
-     * Prefer OpenAI when its key is present. Sarvam currently returns 402 when
-     * its account has no credits, and retrying it for every sentence delays the
-     * coach before the useful fallback can begin.
-     */
-    const providers = openaiTtsConfigured()
-      ? (["openai", "sarvam"] as const)
-      : (["sarvam", "openai"] as const);
+    // Sarvam is the configured voice for this app. OpenAI remains a useful
+    // fallback if Sarvam rejects a request (for example, an expired key or
+    // exhausted quota), so one provider cannot make the coach go silent.
+    const providers = sarvamConfigured()
+      ? (["sarvam", "openai"] as const)
+      : (["openai", "sarvam"] as const);
 
     for (const provider of providers) {
       if (provider === "openai" && !openaiTtsConfigured()) continue;
