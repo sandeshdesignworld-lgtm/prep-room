@@ -281,7 +281,7 @@ function pickVoice(lang: string): SpeechSynthesisVoice | null {
   );
 }
 
-export type VoiceEngine = "bulbul" | "browser" | "none";
+export type VoiceEngine = "server" | "browser" | "none";
 
 /**
  * Asked once per page load, not per component, and never on mount: resolving it
@@ -298,7 +298,7 @@ export function resolveEngine(): Promise<VoiceEngine> {
   if (!enginePromise) {
     enginePromise = fetch("/api/speak")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => (d?.available ? ("bulbul" as const) : browserEngine()))
+      .then((d) => (d?.available ? ("server" as const) : browserEngine()))
       .catch(browserEngine);
   }
   return enginePromise;
@@ -637,7 +637,7 @@ export function useSpeaker({
 
       const controller = new AbortController();
       const response: Promise<Response | null> =
-        engine === "bulbul"
+        engine === "server"
           ? fetch("/api/speak", {
               method: "POST",
               headers: { "content-type": "application/json" },

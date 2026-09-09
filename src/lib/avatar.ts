@@ -76,7 +76,7 @@ const FAILURE: Record<AvatarFailureCode, string> = {
   muted:
     "Read-aloud is off. The avatar is driven by the coach's own speech audio, so with nothing to speak there is nothing to drive it, and the SDK is deliberately not loaded. Turn read-aloud on to see the coach.",
   "no-voice":
-    "Sarvam is not configured, so there is no coach audio to drive the avatar with. Set SARVAM_API_KEY in .env.local and restart the dev server.",
+    "No server voice provider is configured, so there is no coach audio to drive the avatar with. Set OPENAI_API_KEY or SARVAM_API_KEY in Replit Secrets and restart the dev server.",
   "not-configured":
     "GET /api/avatar reported the avatar is not set up. Set SPATIUS_APP_ID, SPATIUS_API_KEY and SPATIUS_AVATAR_ID in .env.local and restart the dev server. The server log names which one is missing.",
   "config-failed":
@@ -229,10 +229,10 @@ export function useAvatar({
       setLoaded("loading");
       setFailure(null);
 
-      // The avatar is driven by the coach's own TTS audio. Without Bulbul there
+      // The avatar is driven by the coach's own TTS audio. Without server TTS there
       // is no audio to drive it with, and an avatar sitting still while the
       // browser's robot voice talks over it is worse than no avatar at all.
-      if ((await resolveEngine()) !== "bulbul") {
+      if ((await resolveEngine()) !== "server") {
         if (live()) fail("no-voice");
         return;
       }

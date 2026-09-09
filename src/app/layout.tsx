@@ -84,7 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         {/* Before first paint, so a user who chose dark never sees a white
             flash, and everyone else never sees dark at all. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="font-sans antialiased">
         {children}

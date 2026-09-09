@@ -1,1 +1,2 @@
 - [Tailwind source scanning](tailwind-source-scanning.md) — scope Tailwind v4 scanning to app source so workspace caches cannot become CSS candidates.
+- [Voice provider fallback](voice-provider-fallback.md) — server TTS must provide 24 kHz PCM for AvatarKit and fall back when a provider has no quota.
